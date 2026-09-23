@@ -42,7 +42,9 @@ function pickByShare(list, x) {
 
 // list: slots in one bed. edgeOf(s): metres to the edge that gets the edging row.
 // depthOf(s): 0 (front/edge) … 1 (back/centre) for height grading.
-function designBed(list, R, rnd, { edgeOf, depthOf, drift = 1.6, edging = true, edgeBand = 0.42, natural = false }) {
+function designBed(list, R, rnd, { edgeOf, depthOf, drift = 1.6, edging = true, edgeBand = 0.42, natural = false, edgePlant }) {
+  const edgeP = edgePlant != null ? R.ps[edgePlant] : R.edge;
+  const body = edgePlant != null ? R.ps.filter((p) => p !== edgeP).sort((a, b) => a.h - b.h) : R.body;
   if (!list.length) return;
   const n = Math.max(2, Math.round((list.length * 0.12) / (drift * drift)));
   const seeds = [];
@@ -52,13 +54,13 @@ function designBed(list, R, rnd, { edgeOf, depthOf, drift = 1.6, edging = true, 
     if (natural) plant = pickByShare(R.ps, rnd());
     else {
       const d = depthOf(s);
-      const idx = Math.max(0, Math.min(R.body.length - 1, Math.floor(d * R.body.length + (rnd() - 0.5) * 1.5)));
-      plant = R.body[idx];
+      const idx = Math.max(0, Math.min(body.length - 1, Math.floor(d * body.length + (rnd() - 0.5) * 1.5)));
+      plant = body[idx];
     }
     seeds.push({ x: s.x, z: s.z, plant });
   }
   for (const s of list) {
-    if (edging && edgeOf(s) < edgeBand) { s.band = R.edge.i; continue; }
+    if (edging && edgeOf(s) < edgeBand) { s.band = edgeP.i; continue; }
     let best = seeds[0], bd = Infinity;
     for (const sd of seeds) {
       const d = (sd.x - s.x) ** 2 + (sd.z - s.z) ** 2;
@@ -114,6 +116,7 @@ export function buildSites(sites, town) {
     const R = roles(option.scheme);
     const slots = [];
     let area = 0, units = 0;
+    const extras = { hedge: 0, gravel: 0, arches: 0, topiary: 0, benches: 0 };
     const mk = (x, z, y, extra = {}) => ({ x, z, y, r: r(), r2: r(), r3: r(), delay: 0.04 + r() * 0.56, band: -1, ...extra });
     const slot = (x, z, y, extra) => { const s = mk(x, z, y, extra); slots.push(s); return s; };
     // Ground-level planting: skip anything inside a building (or on a path, for plants in grass)
@@ -164,6 +167,108 @@ export function buildSites(sites, town) {
           });
           designBed(bed, R, r, { edgeOf: (q) => half - Math.abs(Math.hypot(q.x - cx, q.z - cz) - mid), depthOf: (q) => 1 - Math.abs(Math.hypot(q.x - cx, q.z - cz) - mid) / half, drift: 2.2 });
           area += Math.PI * (sh.r1 ** 2 - sh.r0 ** 2);
+          break;
+        }
+        case 'parterre': {
+          // An enclosed English garden: hedge, arches, gravel paths, sundial, four hedged beds
+          const [cx, cz] = sh.c, S = sh.size / 2, a = (sh.rot * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+          const W = (u, v) => [cx + u * ca - v * sa, cz + u * sa + v * ca];
+          const y0 = groundHeight(cx, cz);
+          const Y = (x, z) => groundHeight(x, z);
+          const up = [0, 1, 0];
+          const quadW = (pts, y, c) => { const P = pts.map(([u, v]) => { const [x, z] = W(u, v); return [x, y ?? Y(x, z) + 0.07, z]; }); batch.quad(P[0], P[1], P[2], P[3], c, null, up); };
+          const HEDGE = col('#3a6234'), GRAVEL = col('#dccfae'), METAL = col('#2b3730'), STONE = col('#d2c8b2');
+          const hedgeRun = (u0, v0, u1, v1, hgt = 0.5, wid = 0.4) => {
+            const [x0, z0] = W(u0, v0), [x1, z1] = W(u1, v1), L = Math.hypot(x1 - x0, z1 - z0);
+            if (L < 0.2) return;
+            batch.box(L + wid * 0.6, hgt, wid, (x0 + x1) / 2, Y((x0 + x1) / 2, (z0 + z1) / 2), (z0 + z1) / 2, -Math.atan2(z1 - z0, x1 - x0), HEDGE);
+            extras.hedge += L;
+          };
+          occ.markRect(cx, cz, sh.size + 2, sh.size + 2, a, 5);
+          // gravel over the whole garden floor
+          const G = 6, gs = (2 * S) / G;
+          for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) {
+            const u0 = -S + i * gs, v0 = -S + j * gs;
+            quadW([[u0, v0], [u0 + gs, v0], [u0 + gs, v0 + gs], [u0, v0 + gs]], null, GRAVEL);
+          }
+          extras.gravel += (2 * S) ** 2;
+          // outer enclosure: low yew hedge with a 3 m gap on each side
+          const gap = 1.6, H = S + 0.3;
+          for (const [su, sv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            if (su) { hedgeRun(su * H, -H, su * H, -gap, 0.9, 0.6); hedgeRun(su * H, gap, su * H, H, 0.9, 0.6); }
+            else { hedgeRun(-H, sv * H, -gap, sv * H, 0.9, 0.6); hedgeRun(gap, sv * H, H, sv * H, 0.9, 0.6); }
+          }
+          // four hedged beds, each a square with its inner corner cut round the central circle
+          const pathHalf = 1.3, inner = S - 2.2, R0 = 5.4, bedArea0 = area;
+          for (const [su, sv] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
+            const loc = [];
+            const t0 = Math.asin(pathHalf / R0), steps = 8;
+            loc.push([pathHalf, inner], [inner, inner], [inner, pathHalf]);
+            for (let k = 0; k <= steps; k++) {
+              const t = t0 + ((Math.PI / 2 - 2 * t0) * k) / steps;
+              loc.push([R0 * Math.cos(t), R0 * Math.sin(t)]);
+            }
+            const bed = loc.map(([u, v]) => W(u * su, v * sv));
+            extrude(batch, bed, y0 - 0.1, 0.24, SOIL);
+            for (let i = 0; i < bed.length; i++) {
+              const [u0, v0] = loc[i], [u1, v1] = loc[(i + 1) % loc.length];
+              hedgeRun(u0 * su, v0 * sv, u1 * su, v1 * sv, 0.45, 0.35);
+            }
+            const list = [];
+            triGrid(polyBounds(bed), 0.42, r, (x, z) => { if (pointInPoly(x, z, bed) && distToPoly(x, z, bed) > 0.3) list.push(slot(x, z, y0 + 0.14, { s: 1.05 })); });
+            const maxD = Math.max(0.5, ...list.map((q) => distToPoly(q.x, q.z, bed)));
+            designBed(list, R, r, { edgeOf: (q) => distToPoly(q.x, q.z, bed) - 0.3, depthOf: (q) => distToPoly(q.x, q.z, bed) / maxD, drift: 1.5, edgeBand: 0.5, edgePlant: sh.edgePlant ?? 4 });
+            area += list.length * 0.42 * 0.42 * 0.866;
+            // a yew cone at the inner corner of each bed, looking onto the sundial
+            const [tx, tz] = W(su * (R0 + 0.9) * 0.72, sv * (R0 + 0.9) * 0.72);
+            batch.cylinder(0.55, 2.4, tx, Y(tx, tz), tz, col('#2f5530'), 10, 0);
+            extras.topiary++;
+          }
+          extras.gravel -= area - bedArea0;
+          // sundial on a stone plinth, with a ring of benches
+          batch.cylinder(0.9, 0.2, cx, y0 + 0.05, cz, STONE, 24);
+          batch.cylinder(0.3, 0.9, cx, y0 + 0.25, cz, STONE, 12, 0.24);
+          batch.cylinder(0.55, 0.08, cx, y0 + 1.15, cz, STONE, 20);
+          batch.box(0.05, 0.3, 0.5, cx, y0 + 1.23, cz, a, METAL);
+          for (let k = 0; k < 4; k++) {
+            const ang = a + Math.PI / 4 + (k * Math.PI) / 2, rr = 3.3;
+            const bx = cx + Math.cos(ang) * rr, bz = cz + Math.sin(ang) * rr;
+            const rot = -ang + Math.PI / 2;
+            batch.box(1.7, 0.08, 0.5, bx, y0 + 0.45, bz, rot, col('#8a6a4a'));
+            batch.box(1.7, 0.45, 0.07, bx + Math.cos(ang) * 0.24, y0 + 0.5, bz + Math.sin(ang) * 0.24, rot, col('#8a6a4a'));
+            for (const e of [-0.75, 0.75]) batch.box(0.07, 0.45, 0.5, bx - Math.sin(ang) * e, y0, bz + Math.cos(ang) * e, rot, METAL);
+            extras.benches++;
+          }
+          // rose arches over the four entrances, with climbing roses
+          const roseI = SCHEMES[option.scheme].plants.findIndex((q) => /rose/i.test(q.name));
+          for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const au = du * (S + 0.3), av = dv * (S + 0.3);
+            const along = du ? [0, 1] : [1, 0]; // arch spans the path
+            const span = 1.5;
+            for (let k = 0; k <= 12; k++) {
+              const th = (k / 12) * Math.PI;
+              const off = Math.cos(th) * span, hgt = 2.2 + Math.sin(th) * 0.9;
+              const [x, z] = W(au + along[0] * off, av + along[1] * off);
+              if (k < 12) {
+                const th2 = ((k + 1) / 12) * Math.PI, off2 = Math.cos(th2) * span, [x2, z2] = W(au + along[0] * off2, av + along[1] * off2);
+                const h2 = 2.2 + Math.sin(th2) * 0.9;
+                batch.box(Math.hypot(x2 - x, z2 - z) + 0.06, 0.07, 0.07, (x + x2) / 2, y0 + (hgt + h2) / 2 - 0.035, (z + z2) / 2, -Math.atan2(z2 - z, x2 - x), METAL);
+              }
+              if (roseI >= 0 && k % 2 === 0) slot(x, z, y0 + hgt, { band: roseI, s: 0.75, hm: 0.15 });
+            }
+            for (const sgn of [-1, 1]) {
+              const [x, z] = W(au + along[0] * span * sgn, av + along[1] * span * sgn);
+              batch.box(0.08, 2.2, 0.08, x, y0, z, a, METAL);
+              if (roseI >= 0) for (let hh = 0.4; hh < 2.2; hh += 0.45) slot(x, z, y0 + hh, { band: roseI, s: 0.7, hm: 0.12 });
+              // box balls flanking each entrance
+              const [bx, bz] = W(au + along[0] * (span + 0.9) * sgn - du * 1.2, av + along[1] * (span + 0.9) * sgn - dv * 1.2);
+              const ball = new THREE.SphereGeometry(0.5, 12, 8);
+              batch.add(ball, new THREE.Matrix4().makeTranslation(bx, Y(bx, bz) + 0.45, bz), col('#355d31'));
+              ball.dispose();
+              extras.topiary++;
+            }
+            extras.arches++;
+          }
           break;
         }
         case 'carpet': {
@@ -496,7 +601,7 @@ export function buildSites(sites, town) {
     for (const s of slots) radius = Math.max(radius, Math.hypot(s.x - cx, s.z - cz));
     const mesh = new THREE.Mesh(batch.build(), MAT);
     mesh.castShadow = mesh.receiveShadow = true;
-    out.push({ id: site.id, option: option.id, key: `${site.id}:${option.id}`, slots, mesh, area: Math.round(area), units, center: slots.length ? [cx, cz] : [0, 0], radius });
+    out.push({ id: site.id, option: option.id, key: `${site.id}:${option.id}`, slots, mesh, area: Math.round(area), units, extras, center: slots.length ? [cx, cz] : [0, 0], radius });
   });
 
   const fixturesMesh = new THREE.Mesh(fixtures.build(), MAT);

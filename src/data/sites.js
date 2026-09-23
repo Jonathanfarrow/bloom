@@ -99,6 +99,22 @@ export const SCHEMES = {
       { name: 'Winter windflower', latin: 'Anemone blanda', color: '#5b73cf', form: 'daisy', h: 0.12, share: 0.15 },
     ],
   },
+  english: {
+    name: 'English garden',
+    season: 'June – September',
+    perM2: 5,
+    note: 'Roses, tall spires of delphinium and foxglove, soft lavender and catmint edging: the classic English garden, at its peak in July.',
+    plants: [
+      { name: "Rose 'Gertrude Jekyll'", latin: 'Rosa (English shrub rose)', color: '#d4587f', form: 'ball', h: 1.0, share: 0.2 },
+      { name: "Rose 'Iceberg'", latin: 'Rosa (floribunda)', color: '#f6f3ec', form: 'ball', h: 0.9, share: 0.12 },
+      { name: 'Delphinium', latin: 'Delphinium elatum', color: '#3f5fc8', form: 'spike', h: 1.5, share: 0.1 },
+      { name: 'Foxglove', latin: 'Digitalis purpurea', color: '#c86aa6', form: 'spike', h: 1.3, share: 0.1 },
+      { name: "Lavender 'Hidcote'", latin: 'Lavandula angustifolia', color: '#5b3f94', form: 'spike', h: 0.5, share: 0.14 },
+      { name: 'Catmint', latin: 'Nepeta × faassenii', color: '#9aa6e2', form: 'spike', h: 0.4, share: 0.12 },
+      { name: "Lady's mantle", latin: 'Alchemilla mollis', color: '#cdd65a', form: 'tiny', h: 0.3, share: 0.12 },
+      { name: "Cranesbill 'Rozanne'", latin: 'Geranium', color: '#6d7fd6', form: 'daisy', h: 0.4, share: 0.1 },
+    ],
+  },
   perennial: {
     name: 'Long-flowering perennials',
     season: 'May – October',
@@ -131,7 +147,10 @@ export const PRICES = {
   bulb: { wholesale: [0.06, 0.15], retail: [0.25, 0.45], unit: 'bulb' },
   wildSeed: { wholesale: [0.11, 0.17], retail: [0.4, 0.6], unit: 'm² of seed' }, // £28–43/kg bulk vs small packs, sown at 4 g/m²
   wildPlug: { wholesale: [0.45, 0.8], retail: [1, 1.5], unit: 'plant' },
-  compost: { wholesale: [2, 4], retail: [6, 8], unit: 'm² (5 cm layer)' },       // bulk bag £40–80/m³ vs 50 L bags
+  compost: { wholesale: [2, 4], retail: [6, 8], unit: 'm² (5 cm layer)' },
+  rose: { wholesale: [3, 6], retail: [10, 18], unit: 'plant' },                  // bare-root in winter vs potted
+  hedging: { wholesale: [1.5, 3], retail: [5, 9], unit: 'plant' },               // Ilex crenata / yew whips (box blight-free)
+  topiary: { wholesale: [15, 35], retail: [40, 90], unit: 'plant' },       // bulk bag £40–80/m³ vs 50 L bags
   mulch: { wholesale: [2, 4], retail: [5, 7], unit: 'm² (5 cm layer)' },         // bulk bark; free woodchip from tree surgeons cuts this to nothing
 };
 export const SOURCING = {
@@ -189,6 +208,15 @@ export const RATES = {
   trafficMgmt: { label: 'Traffic management, 3 visits a year (must be paid)', q: 3, mat: [0, 0], lab: [250, 600], vol: 0 },
   sign: { label: 'Sponsor or interpretation sign', q: 1, mat: [200, 600], lab: [0, 0], vol: 0 },
   coordination: { label: 'Scheme coordination and publicity', q: 1, mat: [0, 0], lab: [300, 800], vol: 20 },
+  gardenPlant: { label: 'Roses (2 per m²), delphiniums, foxgloves and perennials (3 per m²), mulch', q: 'area', mat: (P) => add(times(2, P('rose')), times(3, P('perennial')), P('mulch')), lab: [15, 25], vol: 0.35 },
+  gardenCare: { label: 'Deadheading, rose pruning, staking, weeding', q: 'area', mat: [0.5, 1.5], lab: [5, 9], vol: 0.6 },
+  hedge: { label: 'Low evergreen hedging (Ilex crenata or yew, 5 per metre)', q: 'hedge', mat: (P) => times(5, P('hedging')), lab: [6, 12], vol: 0.3 },
+  hedgeTrim: { label: 'Hedge trimming twice a year', q: 'hedge', mat: [0, 0], lab: [1, 2], vol: 0.15 },
+  gravel: { label: 'Gravel paths: membrane, steel edging, self-binding gravel', q: 'gravel', mat: [8, 15], lab: [15, 30], vol: 0.5 },
+  roseArch: { label: 'Metal rose arch with two climbing roses', q: 'arches', mat: (P) => add([120, 350], times(2, P('rose'))), lab: [0, 0], vol: 3 },
+  topiary: { label: 'Topiary yew cones and balls', q: 'topiary', mat: (P) => P('topiary'), lab: [0, 0], vol: 0.3 },
+  bench: { label: 'Bench (often sponsored as a memorial bench)', q: 'benches', mat: [300, 800], lab: [0, 0], vol: 2 },
+  sundial: { label: 'Stone sundial on a plinth', q: 1, mat: [400, 1500], lab: [0, 0], vol: 4 },
 };
 
 // Running a volunteer programme has its own costs. Contractors include these in their prices.
@@ -521,19 +549,38 @@ export const SITES = [
   },
   {
     id: 'bancroft-gardens',
-    name: 'Bancroft Gardens',
+    name: 'Bancroft English Garden',
     street: 'Bancroft Gardens',
-    role: 'green',
-    headline: 'A formal showpiece bed in the town’s formal gardens.',
-    why: ['Judges and photographers expect a formal display in the main gardens.', 'Good footfall from Bancroft and the splash park.'],
+    role: 'flagship',
+    headline: 'A proper English garden in the heart of the town: somewhere people come to see.',
+    why: [
+      'Bancroft Gardens already has formal paths and a clear lawn about 40 m square beside the main walk, big enough for a garden with several beds.',
+      'A garden of several beds, with roses, hedges, gravel paths and a sundial, gives visitors a reason to come and stay, not just walk past.',
+      'Planted with roses, delphiniums and lavender, it is at its best in July, when the judges come.',
+      'Benches, arches and a sundial are ideal for sponsorship and memorial giving, and the beds can be adopted by volunteer teams.',
+    ],
     owner: 'North Hertfordshire District Council (parks), to confirm',
-    checks: ['Agree the location with the parks team, away from events space.'],
-    partners: ['Council parks team', 'Sponsor for the bed'],
+    checks: [
+      'Agree the layout with the parks team, and check for underground services before digging paths.',
+      'Box blight: use Ilex crenata or yew for the low hedges instead of box.',
+      'A water point nearby for the first two summers while the hedges and roses establish.',
+    ],
+    partners: ['Council parks team', 'Volunteer bed-adoption teams', 'Bench and arch sponsors', 'Local garden club or horticultural society'],
     options: [
       {
+        id: 'english', name: 'English garden', scheme: 'english',
+        summary: 'A garden enclosed by a low evergreen hedge, with rose arches over its four entrances and gravel paths leading to a central sundial with benches. Four hedged beds hold roses, delphiniums, foxgloves and lavender, framed by topiary. It is approached along a double border beside the main path.',
+        maintenance: 2, impact: 2, wildlife: 2,
+        shapes: [
+          { kind: 'parterre', c: [263, -603], size: 36, rot: 30 },
+          { kind: 'border', pts: [[218, -575], [236, -604], [256, -635]], o0: 1.4, o1: 4.0 },
+        ],
+        capital: ['gardenPlant', 'bedPrep', 'hedge', 'gravel', 'roseArch', 'topiary', 'bench', 'sundial'], annual: ['gardenCare', 'hedgeTrim'],
+      },
+      {
         id: 'perennial', name: 'Double herbaceous border', scheme: 'perennial',
-        summary: 'A pair of deep borders either side of the main path through the gardens: low edging at the path, bold drifts of long-flowering perennials rising to tall verbena at the back. Looks good from May to October, and is at its best in July for judging.',
-        maintenance: 1, impact: 2, wildlife: 2,
+        summary: 'Just the pair of deep borders either side of the main path: low edging at the path and drifts of long-flowering perennials rising to tall verbena at the back. A good first phase for the English garden.',
+        maintenance: 1, impact: 1, wildlife: 2,
         shapes: [{ kind: 'border', pts: [[218, -575], [236, -604], [256, -635]], o0: 1.4, o1: 4.4 }],
         capital: ['perennialPlant', 'bedPrep'], annual: ['perennialCare'],
       },
@@ -641,10 +688,10 @@ export function costOf(option, measured, model = 'volunteer', sourcing = 'mixed'
   const lines = (keys) => keys.map((k) => {
     const r = RATES[k];
     const mat = typeof r.mat === 'function' ? r.mat(P) : r.mat;
-    const qty = r.q === 'area' ? measured.area : r.q === 'units' ? measured.units : r.q;
+    const qty = typeof r.q === 'number' ? r.q : measured[r.q] ?? measured.extras?.[r.q] ?? 0;
     const byVolunteers = model === 'volunteer' && r.vol > 0;
     const lo = (mat[0] + (byVolunteers ? 0 : r.lab[0])) * qty, hi = (mat[1] + (byVolunteers ? 0 : r.lab[1])) * qty;
-    return { label: r.label, qty, kind: r.q === 'area' || r.q === 'units' ? r.q : 'fixed', plant: typeof r.mat === 'function', lo, hi, hours: byVolunteers ? r.vol * qty : 0, byVolunteers, paidLabour: !byVolunteers && r.lab[1] > 0 };
+    return { label: r.label, qty, kind: typeof r.q === 'number' ? 'fixed' : r.q, plant: typeof r.mat === 'function', lo, hi, hours: byVolunteers ? r.vol * qty : 0, byVolunteers, paidLabour: !byVolunteers && r.lab[1] > 0 };
   });
   const capital = lines(option.capital), annual = lines(option.annual);
   const sum = (ls) => ls.reduce((a, l) => [a[0] + l.lo, a[1] + l.hi], [0, 0]);

@@ -395,7 +395,7 @@ function renderDetail() {
   const idx = Math.max(0, list.findIndex((s) => s.id === site.id));
   const prev = list[(idx - 1 + list.length) % list.length], next = list[(idx + 1) % list.length];
   const plants = scheme.perM2 ? Math.round((i.area * scheme.perM2) / 10) * 10 : 0;
-  const qty = (l) => (l.kind === 'area' ? `${fmt(l.qty)} m²` : l.kind === 'units' ? `${fmt(l.qty)} ×` : '');
+  const qty = (l) => ({ area: `${fmt(l.qty)} m²`, gravel: `${fmt(l.qty)} m²`, hedge: `${fmt(l.qty)} m`, units: `${fmt(l.qty)} ×`, arches: `${fmt(l.qty)} ×`, topiary: `${fmt(l.qty)} ×`, benches: `${fmt(l.qty)} ×` })[l.kind] || '';
   const costRows = (lines) => lines.map((l) => `<tr><td>${l.label}<em>${qty(l)}${l.byVolunteers ? `${qty(l) ? ' · ' : ''}volunteers: about ${hrs(l.hours)} hours, materials only` : l.paidLabour ? `${qty(l) ? ' · ' : ''}paid work` : ''}</em></td><td class="h">${range([l.lo, l.hi])}</td></tr>`).join('');
   const pl = pillarLevels(site.id);
   $('#detail-body').innerHTML = `

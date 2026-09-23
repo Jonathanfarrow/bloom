@@ -183,7 +183,8 @@ export const RATES = {
   perennialPlant: { label: 'Perennials (6 per m²) and bark mulch', q: 'area', mat: (P) => add(times(6, P('perennial')), P('mulch')), lab: [12, 20], vol: 0.25 },
   perennialCare: { label: 'Weeding, cutting back, a few replacements', q: 'area', mat: [0.3, 1], lab: [3, 6], vol: 0.3 },
   lavenderPlant: { label: 'Lavender (3.5 per m²) and gravel/bark mulch', q: 'area', mat: (P) => add(times(3.5, P('lavender')), times(0.6, P('mulch'))), lab: [6, 10], vol: 0.2 },
-  lavenderCare: { label: 'Late-summer trim and weeding', q: 'area', mat: [0, 0.1], lab: [2, 3.5], vol: 0.06 },
+  lavenderCare: { label: 'Late-summer trim, and weeding until the plants knit together', q: 'area', mat: [0, 0.1], lab: [2, 3.5], vol: 0.15 },
+  establish: { label: 'Watering through the first summer while new plants establish', q: 'area', mat: [0, 0], lab: [2, 4], vol: 0.15 },
   meadowPrep: { label: 'Ground preparation (hired machinery and operator)', q: 'area', mat: [0, 0], lab: [0.4, 1.2], vol: 0 },
   meadowSeed: { label: 'Native wildflower seed, sown by hand (4 g/m²)', q: 'area', mat: (P) => P('wildSeed'), lab: [0.2, 0.5], vol: 0.01 },
   meadowPlugs: { label: 'Wildflower plugs (3 per m²) plus seed', q: 'area', mat: (P) => add(times(3, P('wildPlug')), P('wildSeed')), lab: [3, 6], vol: 0.15 },
@@ -224,6 +225,10 @@ export const PROGRAMME = [
   { label: 'Group insurance (RHS community group scheme, check cover)', capital: [0, 0], annual: [100, 300], when: 'volunteer' },
   { label: 'Volunteer training: first aid, working safely near roads', capital: [0, 0], annual: [200, 600], when: 'volunteer' },
   { label: 'Anglia in Bloom entry and judges’ briefing notes (check current fee)', capital: [0, 0], annual: [250, 700], when: 'always' },
+  // Volunteer time that isn't tied to one site; the environment and community marks depend on it
+  { label: 'Litter picks and tidying along the judges’ route (monthly, about 10 people for 2 hours)', capital: [0, 0], annual: [0, 0], hours: 240, when: 'volunteer' },
+  { label: 'Organising: volunteer rota, sponsors, social media, the judges’ portfolio', capital: [0, 0], annual: [0, 0], hours: 120, when: 'volunteer' },
+  { label: 'Judging day, a community planting day and a school session', capital: [0, 0], annual: [0, 0], hours: 60, when: 'volunteer' },
 ];
 export const VOLUNTEER_RATE = 12.5; // £/hour used to value volunteer time as in-kind match funding
 
@@ -272,7 +277,7 @@ export const SITES = [
         summary: 'A sweeping ribbon of lavender high on the hill, curving from the west face round towards the summit, with rows running along the slope like a Hitchin lavender field. It sits above the Mount Garrison flats, so it can be seen over them. It can be planted in phases over two or three years.',
         maintenance: 0, impact: 2, wildlife: 2,
         shapes: [{ kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], width: 16, spacing: 1.5, every: 0.75, within: 'Windmill Hill' }],
-        capital: ['lavenderPlant', 'sign'], annual: ['lavenderCare'],
+        capital: ['lavenderPlant', 'establish', 'sign'], annual: ['lavenderCare'],
       },
       {
         id: 'bulbs', name: 'River of crocus', scheme: 'bulbs',
@@ -486,7 +491,7 @@ export const SITES = [
         summary: 'The island planted as one large, layered bed: low cranesbill around the edge, sweeps of catmint, salvia and yarrow, and airy grasses and tall verbena in the middle that move in the wind. Colour from May to October with only a few visits a year, which keeps traffic management costs down.',
         maintenance: 0, impact: 2, wildlife: 2,
         shapes: [{ kind: 'circle', c: [228, 733], r: 11 }],
-        capital: ['perennialPlant', 'sign'], annual: ['perennialCare', 'trafficMgmt'],
+        capital: ['perennialPlant', 'establish', 'sign'], annual: ['perennialCare', 'trafficMgmt'],
       },
       {
         id: 'bulbs', name: 'Bulb and wildflower island', scheme: 'bulbs',
@@ -574,14 +579,14 @@ export const SITES = [
           { kind: 'parterre', c: [263, -603], size: 36, rot: 30 },
           { kind: 'border', pts: [[218, -575], [236, -604], [256, -635]], o0: 1.4, o1: 4.0 },
         ],
-        capital: ['gardenPlant', 'bedPrep', 'hedge', 'gravel', 'bench', 'sundial'], annual: ['gardenCare', 'hedgeTrim'],
+        capital: ['gardenPlant', 'bedPrep', 'establish', 'hedge', 'gravel', 'bench', 'sundial'], annual: ['gardenCare', 'hedgeTrim'],
       },
       {
         id: 'perennial', name: 'Double herbaceous border', scheme: 'perennial',
         summary: 'Just the pair of deep borders either side of the main path: low edging at the path and drifts of long-flowering perennials rising to tall verbena at the back. A good first phase for the English garden.',
         maintenance: 1, impact: 1, wildlife: 2,
         shapes: [{ kind: 'border', pts: [[218, -575], [236, -604], [256, -635]], o0: 1.4, o1: 4.4 }],
-        capital: ['perennialPlant', 'bedPrep'], annual: ['perennialCare'],
+        capital: ['perennialPlant', 'bedPrep', 'establish'], annual: ['perennialCare'],
       },
     ],
   },
@@ -601,7 +606,7 @@ export const SITES = [
         summary: 'A border along the south side of the nave, facing Churchyard Walk: an edging of cranesbill, drifts of salvia, catmint and yarrow, and tall verbena against the church wall. In flower for July judging.',
         maintenance: 1, impact: 1, wildlife: 2,
         shapes: [{ kind: 'poly', pts: [[93.7, -42.7], [128.2, -34.3], [127.5, -31.4], [93.0, -39.8]] }],
-        capital: ['perennialPlant', 'bedPrep'], annual: ['perennialCare'],
+        capital: ['perennialPlant', 'bedPrep', 'establish'], annual: ['perennialCare'],
       },
       {
         id: 'bulbs', name: 'Bulbs along the churchyard paths', scheme: 'bulbs',
@@ -629,7 +634,7 @@ export const SITES = [
         summary: 'Stone-faced raised beds either side of the entrance, with perennials.',
         maintenance: 1, impact: 1, wildlife: 1,
         shapes: [{ kind: 'frontbeds', near: [-50, -225], road: 'Brand Street' }],
-        capital: ['raisedBed', 'perennialPlant'], annual: ['perennialCare'],
+        capital: ['raisedBed', 'perennialPlant', 'establish'], annual: ['perennialCare'],
       },
     ],
   },

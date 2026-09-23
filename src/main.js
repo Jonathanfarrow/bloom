@@ -278,7 +278,12 @@ function planTotals() {
   }
   t.sitesCapital = [...t.capital];
   t.programme = programmeLines();
-  for (const p of t.programme) { t.capital[0] += p.capital[0]; t.capital[1] += p.capital[1]; t.annual[0] += p.annual[0]; t.annual[1] += p.annual[1]; }
+  t.siteHours = t.yearHours;
+  t.progHours = 0;
+  for (const p of t.programme) { t.capital[0] += p.capital[0]; t.capital[1] += p.capital[1]; t.annual[0] += p.annual[0]; t.annual[1] += p.annual[1]; t.progHours += p.hours ?? 0; }
+  t.yearHours += t.progHours;
+  // year one: planting and establishment on top of the normal year
+  t.firstYearHours = t.setupHours + t.yearHours;
   t.contingency = [t.capital[0] * 0.1, t.capital[1] * 0.1];
   t.setup = [t.capital[0] + t.contingency[0], t.capital[1] + t.contingency[1]];
   // a regular volunteer giving 2 hours a week over a 30-week season
@@ -333,7 +338,7 @@ function renderList() {
 function renderPlanBar() {
   const t = planTotals();
   $('#plan-bar').innerHTML = `<div><span class="pb-label">Your plan · ${t.count} sites · volunteer-led</span>
-    <span class="pb-figs"><b>${shortRange(t.setup)}</b> set-up · <b>${shortRange(t.annual)}</b> a year${state.model === 'volunteer' ? `<br /><b>${hrs(t.yearHours)}</b> volunteer hours a year` : ''}</span></div>
+    <span class="pb-figs"><b>${shortRange(t.setup)}</b> set-up · <b>${shortRange(t.annual)}</b> a year${state.model === 'volunteer' ? `<br /><b>${hrs(t.firstYearHours)}</b> volunteer hours in year one, then <b>${hrs(t.yearHours)}</b> a year` : ''}</span></div>
     <button class="primary small" id="open-plan">Plan &amp; costs</button>`;
 }
 $('#filters').addEventListener('click', (e) => {
@@ -416,7 +421,7 @@ function renderDetail() {
         return `<button class="option" data-opt="${o.id}" aria-pressed="${o.id === opt.id}">
           <span class="opt-head"><span class="opt-letter">${site.options.length > 1 ? `Option ${'ABC'[k]}` : 'Proposal'}</span>${k === 0 && site.options.length > 1 ? '<span class="rec">Recommended</span>' : ''}</span>
           <span class="opt-name"><span class="dots" aria-hidden="true">${SCHEMES[o.scheme].plants.slice(0, 3).map((p) => `<i style="background:${p.color}"></i>`).join('')}</span>${o.name}</span>
-          <span class="opt-cost"><b>${range(oc.capitalTotal)}</b> set-up · <b>${range(oc.annualTotal)}</b> a year${vol && oc.setupHours + oc.yearHours > 0 ? `<br />plus ${[oc.setupHours >= 1 ? `<b>${hrs(oc.setupHours)}</b> volunteer hours to plant` : '', oc.yearHours >= 1 ? `<b>${hrs(oc.yearHours)}</b> hours a year to look after` : ''].filter(Boolean).join(', ')}` : ''}</span>
+          <span class="opt-cost"><b>${range(oc.capitalTotal)}</b> set-up · <b>${range(oc.annualTotal)}</b> a year${vol && oc.setupHours + oc.yearHours > 0 ? `<br />plus ${[oc.setupHours >= 1 ? `<b>${hrs(oc.setupHours)}</b> volunteer hours to plant and water in` : '', oc.yearHours >= 1 ? `<b>${hrs(oc.yearHours)}</b> hours a year to look after` : ''].filter(Boolean).join(', ')}` : ''}</span>
           <span class="opt-tags">${levelTag('Upkeep', o.maintenance, false)}${levelTag('Impact', o.impact, true)}${levelTag('Wildlife', o.wildlife, true)}</span>
         </button>`;
       }).join('')}
@@ -490,7 +495,7 @@ function renderPlan() {
     const c = siteCost(s.id), o = optionOf(s.id);
     return `<tr data-site="${s.id}"><td><b>${routeNo(s.id)}. ${s.name}</b><em>${o.name}${vol && c.yearHours ? ` · ${hrs(c.yearHours)} vol. hrs/yr` : ''}</em></td><td class="h">${range(c.capitalTotal)}</td><td class="h">${range(c.annualTotal)}</td></tr>`;
   }).join('');
-  const prog = t.programme.map((p) => `<tr class="prog"><td>${p.label}</td><td class="h">${range(p.capital)}</td><td class="h">${range(p.annual)}</td></tr>`).join('');
+  const prog = t.programme.map((p) => `<tr class="prog"><td>${p.label}${p.hours ? `<em>volunteers: about ${hrs(p.hours)} hours a year</em>` : ''}</td><td class="h">${p.hours ? '–' : range(p.capital)}</td><td class="h">${p.hours ? 'volunteers' : range(p.annual)}</td></tr>`).join('');
   const left = SITES.filter((s) => !inPlan(s.id));
   $('#detail-body').innerHTML = `
     <span class="type-tag">Planting plan</span>
@@ -501,7 +506,7 @@ function renderPlan() {
       <div class="tile"><span>Each year</span><b>${shortRange(t.annual)}</b><em>materials, specialist work, running the group</em></div>
       ${vol ? `<div class="tile"><span>Volunteers</span><b>${hrs(t.yearHours)} hrs</b><em>a year · about ${t.volunteers} people at 2 hrs/week</em></div>` : `<div class="tile"><span>Sites</span><b>${t.count}</b><em>of ${SITES.length} proposed</em></div>`}
     </div>
-    ${vol ? `<p class="fine">Volunteer time is worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year at £${VOLUNTEER_RATE}/hour. Many funders accept that as in-kind match funding. Planting the sites takes about ${hrs(t.setupHours)} hours on top.</p>` : ''}
+    ${vol ? `<p class="fine">Volunteer time is worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year at £${VOLUNTEER_RATE}/hour. Many funders accept that as in-kind match funding. Of those hours, ${hrs(t.siteHours)} are looking after the sites and ${hrs(t.progHours)} are litter picks, organising and events. Year one needs about ${hrs(t.setupHours)} more for planting and first-summer watering: ${hrs(t.firstYearHours)} in all.</p>` : ''}
     <table class="plan-table">
       <thead><tr><th>Stop, site and option</th><th class="h">Set-up</th><th class="h">Per year</th></tr></thead>
       <tbody>${rows}
@@ -563,7 +568,7 @@ function planText() {
     '',
     `Phase 1: ${t.count} sites, delivered by volunteers, with paid specialists only where needed (traffic management, work at height, structural fixings, machinery). Plants bought: ${SOURCING[state.sourcing].name.toLowerCase()}.`,
     `Set-up ${range(t.setup)} (including 10% contingency). Running costs ${range(t.annual)} a year.`,
-    vol ? `Volunteer time: about ${hrs(t.setupHours)} hours to plant, then ${hrs(t.yearHours)} hours a year (about ${t.volunteers} regular volunteers), worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year as in-kind match funding.` : '',
+    vol ? `Volunteer time: about ${hrs(t.firstYearHours)} hours in year one (including ${hrs(t.setupHours)} to plant and water in), then ${hrs(t.yearHours)} hours a year (${hrs(t.siteHours)} on the sites, ${hrs(t.progHours)} on litter picks, organising and events). That is about ${t.volunteers} regular volunteers giving 2 hours a week through the season, and the time is worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year as in-kind match funding.` : '',
     'Figures are indicative ranges for budgeting, based on typical UK prices and quantities measured from a 3D model of the town. Quotes to follow.',
     '',
     'HOW THE PLAN TARGETS AN ANGLIA IN BLOOM AWARD (LARGE TOWN)',
@@ -573,7 +578,7 @@ function planText() {
   ];
   if (t.programme.length) {
     lines.push('RUNNING THE PROGRAMME');
-    for (const p of t.programme) lines.push(`${p.label}: ${range(p.capital)} set-up, ${range(p.annual)} a year.`);
+    for (const p of t.programme) lines.push(p.hours ? `${p.label}: about ${hrs(p.hours)} volunteer hours a year.` : `${p.label}: ${range(p.capital)} set-up, ${range(p.annual)} a year.`);
     lines.push('');
   }
   const later = SITES.filter((x) => !inPlan(x.id));
@@ -585,7 +590,7 @@ function planText() {
     lines.push(`Proposal: ${o.name}. ${o.summary}`);
     lines.push(`Why: ${s.why.join(' ')}`);
     lines.push(`Size: about ${fmt(i.area)} m²${i.units ? `, ${fmt(i.units)} containers` : ''}. Upkeep ${LEVEL[o.maintenance].toLowerCase()}, impact ${LEVEL[o.impact].toLowerCase()}, wildlife value ${LEVEL[o.wildlife].toLowerCase()}.`);
-    lines.push(`Cost: ${range(c.capitalTotal)} set-up, ${range(c.annualTotal)} a year${vol && c.setupHours + c.yearHours ? `; plus about ${hrs(c.setupHours)} volunteer hours to plant and ${hrs(c.yearHours)} a year` : ''}.`);
+    lines.push(`Cost: ${range(c.capitalTotal)} set-up, ${range(c.annualTotal)} a year${vol && c.setupHours + c.yearHours ? `; plus about ${c.setupHours >= 1 ? `${hrs(c.setupHours)} volunteer hours to plant and water in, then ` : ''}${hrs(c.yearHours)}${c.setupHours >= 1 ? '' : ' volunteer hours'} a year` : ''}.`);
     lines.push(`Land: ${s.owner}. To confirm: ${s.checks.join(' ')}`);
     lines.push(`Partners: ${s.partners.join(', ')}.`);
   }

@@ -19,8 +19,9 @@ const MATERIALS = { stone: col('#cdc2ab'), timber: col('#8a5a3b'), green: col('#
 //   meadows    – natural-looking drifts of each species rather than confetti
 // Every slot gets `band` = the index of its plant in the option's scheme.
 // ---------------------------------------------------------------------------
-function roles(schemeKey) {
-  const ps = SCHEMES[schemeKey].plants.map((p, i) => ({ ...p, i }));
+function roles(schemeKey, only) {
+  let ps = SCHEMES[schemeKey].plants.map((p, i) => ({ ...p, i }));
+  if (only) ps = only.map((i) => ps[i]);
   const flowering = ps.filter((p) => p.form !== 'foliage');
   const low = [...(flowering.length ? flowering : ps)].sort((a, b) => a.h - b.h);
   const edge = low[0];
@@ -116,7 +117,7 @@ export function buildSites(sites, town) {
     const R = roles(option.scheme);
     const slots = [];
     let area = 0, units = 0;
-    const extras = { edging: 0, hedge: 0, gravel: 0, benches: 0 };
+    const extras = { edging: 0, hedge: 0, gravel: 0, benches: 0, obelisks: 0, meadow: 0 };
     const mk = (x, z, y, extra = {}) => ({ x, z, y, r: r(), r2: r(), r3: r(), delay: 0.04 + r() * 0.56, band: -1, ...extra });
     const slot = (x, z, y, extra) => { const s = mk(x, z, y, extra); slots.push(s); return s; };
     // Ground-level planting: skip anything inside a building (or on a path, for plants in grass)
@@ -171,7 +172,7 @@ export function buildSites(sites, town) {
         }
         case 'parterre': {
           // An English garden: four large flower beds, gravel paths between them, a sundial and benches
-          const [cx, cz] = sh.c, S = sh.size / 2, a = (sh.rot * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+          const [cx, cz] = sh.c, SU = (sh.sizeU ?? sh.size) / 2, SV = (sh.sizeV ?? sh.size) / 2, a = (sh.rot * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
           const W = (u, v) => [cx + u * ca - v * sa, cz + u * sa + v * ca];
           const y0 = groundHeight(cx, cz);
           const Y = (x, z) => groundHeight(x, z);
@@ -186,20 +187,20 @@ export function buildSites(sites, town) {
             batch.box(L + 0.3, 0.42, 0.34, (x0 + x1) / 2, Y((x0 + x1) / 2, (z0 + z1) / 2), (z0 + z1) / 2, -Math.atan2(z1 - z0, x1 - x0), HEDGE);
             extras.hedge += L;
           };
-          occ.markRect(cx, cz, sh.size + 2, sh.size + 2, a, 5);
+          occ.markRect(cx, cz, 2 * SU + 2, 2 * SV + 2, a, 5);
           // gravel over the whole garden floor
-          const G = 6, gs = (2 * S) / G;
+          const G = 6, gu = (2 * SU) / G, gv = (2 * SV) / G;
           for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) {
-            const u0 = -S + i * gs, v0 = -S + j * gs;
-            quadW([[u0, v0], [u0 + gs, v0], [u0 + gs, v0 + gs], [u0, v0 + gs]], null, GRAVEL);
+            const u0 = -SU + i * gu, v0 = -SV + j * gv;
+            quadW([[u0, v0], [u0 + gu, v0], [u0 + gu, v0 + gv], [u0, v0 + gv]], null, GRAVEL);
           }
-          extras.gravel += (2 * S) ** 2;
+          extras.gravel += 4 * SU * SV;
           // four hedged beds, each a square with its inner corner cut round the central circle
-          const pathHalf = 1.3, inner = S - 2.2, R0 = 5.4, bedArea0 = area;
+          const pathHalf = 1.3, innerU = SU - 2.2, innerV = SV - 2.2, R0 = sh.hub ?? 5.4, bedArea0 = area;
           for (const [su, sv] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
             const loc = [];
             const t0 = Math.asin(pathHalf / R0), steps = 8;
-            loc.push([pathHalf, inner], [inner, inner], [inner, pathHalf]);
+            loc.push([pathHalf, innerV], [innerU, innerV], [innerU, pathHalf]);
             for (let k = 0; k <= steps; k++) {
               const t = t0 + ((Math.PI / 2 - 2 * t0) * k) / steps;
               loc.push([R0 * Math.cos(t), R0 * Math.sin(t)]);
@@ -497,7 +498,10 @@ export function buildSites(sites, town) {
         case 'ribbon': {
           // A tapered, curving band along a smoothed centre line, with rows parallel to it
           const curve = new THREE.CatmullRomCurve3(sh.pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
-          const path = new Path(curve.getSpacedPoints(120).map((v) => [v.x, v.z]));
+          let path = new Path(curve.getSpacedPoints(120).map((v) => [v.x, v.z]));
+          // a parallel stripe: shift the centre line sideways (positive = left of the direction of travel)
+          if (sh.offset) path = new Path(Array.from({ length: 121 }, (_, k) => { const p = path.at((path.length * k) / 120); return [p.x + p.nx * sh.offset, p.z + p.nz * sh.offset]; }));
+          const RR = sh.scheme ? roles(sh.scheme) : R, stripe = [];
           const L = path.length, half = sh.width / 2;
           let row = 0;
           for (let o = -half; o <= half + 1e-6; o += sh.spacing, row++) {
@@ -509,8 +513,42 @@ export function buildSites(sites, town) {
               const oo = o + (r() - 0.5) * 0.12, tt = (r() - 0.5) * 0.1;
               const x = p.x + p.nx * oo + p.dx * tt, z = p.z + p.nz * oo + p.dz * tt;
               if (!within(x, z, sh.within) || !groundOk(x, z, true)) continue;
-              slot(x, z, groundHeight(x, z), { band: (sh.bands || [0, 1, 2])[row % (sh.bands || [0, 1, 2]).length], s: sh.size ?? 1.85, hm: sh.hm ?? 1 });
-              area += sh.spacing * sh.every;
+              stripe.push(slot(x, z, groundHeight(x, z), { band: (sh.bands || [0, 1, 2])[row % (sh.bands || [0, 1, 2]).length], s: sh.size ?? 1.85, hm: sh.hm ?? 1, scheme: sh.scheme }));
+              if (sh.measure) extras[sh.measure] += sh.spacing * sh.every; else area += sh.spacing * sh.every;
+            }
+          }
+          if (sh.natural) designBed(stripe, RR, r, { natural: true, edging: false, drift: 2.6, edgeOf: () => 9, depthOf: () => 0 });
+          break;
+        }
+        case 'beads': {
+          // A line of round beds, each in its own colours, with a shared edging plant
+          // and an obelisk of sweet peas in the middle for height
+          const [ax, az] = sh.a, [bx, bz] = sh.b, n = sh.n;
+          const OAK = col('#6d4a31'), STEEL = col('#3b3f3a');
+          for (let k = 0; k < n; k++) {
+            const f = n === 1 ? 0.5 : k / (n - 1);
+            const cx = ax + (bx - ax) * f, cz = az + (bz - az) * f, y0 = groundHeight(cx, cz), h = 0.2;
+            batch.cylinder(sh.r + 0.08, h, cx, y0 - 0.02, cz, STEEL, 48);
+            batch.cylinder(sh.r, h + 0.04, cx, y0 - 0.02, cz, SOIL, 48);
+            const Rk = roles(option.scheme, [sh.edge, ...sh.palettes[k % sh.palettes.length]]);
+            const bed = [];
+            triGrid({ x0: cx - sh.r, x1: cx + sh.r, z0: cz - sh.r, z1: cz + sh.r }, 0.34, r, (x, z) => {
+              const d = Math.hypot(x - cx, z - cz);
+              if (d < sh.r - 0.1 && d > 0.5) bed.push(slot(x, z, y0 + h));
+            });
+            designBed(bed, Rk, r, { edgeOf: (q) => sh.r - Math.hypot(q.x - cx, q.z - cz), depthOf: (q) => 1 - Math.hypot(q.x - cx, q.z - cz) / sh.r, drift: 1.0, edgePlant: 0, edgeBand: 0.45 });
+            area += Math.PI * sh.r * sh.r;
+            extras.edging += 2 * Math.PI * sh.r;
+            if (sh.climber != null) {
+              // oak obelisk with sweet peas twining up it
+              const H = 2.4, top = y0 + h;
+              batch.cylinder(0.42, H, cx, top, cz, OAK, 4, 0.05);
+              batch.cylinder(0.09, 0.18, cx, top + H, cz, OAK, 8, 0.02);
+              for (let j = 0; j < 30; j++) {
+                const t = (j / 30) * H * 0.92, rr = 0.42 * (1 - t / H) + 0.1, ang = j * 2.4;
+                slot(cx + Math.cos(ang) * rr, cz + Math.sin(ang) * rr, top + t, { band: sh.climber, s: 0.55, hm: 0.3 });
+              }
+              extras.obelisks++;
             }
           }
           break;

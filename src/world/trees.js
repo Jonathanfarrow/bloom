@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { DATA, HALF_W, HALF_H, groundHeight } from './geo.js';
 import { pointInPoly, polyBounds, polyArea, rng } from './util.js';
+import { SURVEYED_TREES } from '../data/parkTrees.js';
 
 const TREE_GREENS = ['#5e8f45', '#6c9a4a', '#7aa652', '#57864a', '#86ab58', '#4f7d44', '#93b25f'];
 const DENSITY = { wood: 90, forest: 90, scrub: 160, park: 700, recreation_ground: 900, cemetery: 350, grave_yard: 300, garden: 400, village_green: 900, school: 1400, meadow: 2500, grassland: 2500 };
@@ -21,10 +22,12 @@ export function buildTrees(occ) {
   };
 
   for (const [x, z] of DATA.trees) if (occ.get(x, z) !== 4) add(x, z, 1.05, 0);
+  // Hand-surveyed parks: exact trees, sized to their crowns, and no random extras
+  for (const list of Object.values(SURVEYED_TREES)) for (const [x, z, R, kind] of list) if (occ.get(x, z) !== 4) add(x, z, (R / 4.2) / 1.02, kind);
 
   for (const l of DATA.land) {
     const per = DENSITY[l.c];
-    if (!per) continue;
+    if (!per || SURVEYED_TREES[l.n]) continue;
     const b = polyBounds(l.p);
     const n = Math.min(1500, Math.floor(polyArea(l.p) / per));
     for (let i = 0; i < n * 1.6; i++) {

@@ -15,7 +15,7 @@ to the council, businesses, sponsors and residents.
   bridges, parks and real terrain. Windmill Hill rises about 28 m above Market
   Place. There are lamp posts, benches, people for scale, soft ambient shading
   and a tilt-shift "miniature" effect up close.
-- **A costed planting plan for the council.** Phase 1 is four volunteer-led sites: the **Bancroft English Garden** (four flower beds of roses, delphiniums and lavender, with gravel paths, a sundial and benches), Market Place, St Mary's churchyard and the lavender ribbon on Windmill Hill. Nine more are kept as future sites that can be ticked into the plan. It covers 13 sites in four groups
+- **A costed planting plan for the council.** Phase 1 is four volunteer-led sites: the **Bancroft English Garden** (four hedged flower beds of roses, delphiniums and lavender on the north lawn, clear of the funfair ground), corner planters in Market Place that leave the square free for events, four jewel-coloured beds on St Mary's riverside lawn, and the **lavender waves** on Windmill Hill (purple and white lavender stripes with a band of poppies and cornflowers). Trees in Bancroft Gardens are placed from an aerial photo. Nine more are kept as future sites that can be ticked into the plan. It covers 13 sites in four groups
   (flagship, gateway, town centre, green space). Most have 2–3 options, and the
   recommended one is listed first. Each option shows:
   - set-up and yearly running costs as ranges, with a line-by-line breakdown

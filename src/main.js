@@ -405,7 +405,7 @@ function renderDetail() {
   const idx = Math.max(0, list.findIndex((s) => s.id === site.id));
   const prev = list[(idx - 1 + list.length) % list.length], next = list[(idx + 1) % list.length];
   const plants = scheme.perM2 ? Math.round((i.area * scheme.perM2) / 10) * 10 : 0;
-  const qty = (l) => ({ area: `${fmt(l.qty)} m²`, gravel: `${fmt(l.qty)} m²`, edging: `${fmt(l.qty)} m`, hedge: `${fmt(l.qty)} m`, units: `${fmt(l.qty)} ×`, benches: `${fmt(l.qty)} ×` })[l.kind] || '';
+  const qty = (l) => ({ area: `${fmt(l.qty)} m²`, gravel: `${fmt(l.qty)} m²`, edging: `${fmt(l.qty)} m`, hedge: `${fmt(l.qty)} m`, units: `${fmt(l.qty)} ×`, benches: `${fmt(l.qty)} ×`, obelisks: `${fmt(l.qty)} ×`, meadow: `${fmt(l.qty)} m²` })[l.kind] || '';
   const costRows = (lines) => lines.map((l) => `<tr><td>${l.label}<em>${qty(l)}${l.byVolunteers ? `${qty(l) ? ' · ' : ''}volunteers: about ${hrs(l.hours)} hours, materials only` : l.paidLabour ? `${qty(l) ? ' · ' : ''}paid work` : ''}</em></td><td class="h">${range([l.lo, l.hi])}</td></tr>`).join('');
   const pl = pillarLevels(site.id);
   $('#detail-body').innerHTML = `
@@ -441,7 +441,7 @@ function renderDetail() {
     <h3 class="section-label">Planting · ${scheme.season}</h3>
     <p class="scheme-note">${scheme.note}</p>
     <table class="plants"><tbody>
-      ${scheme.plants.map((p) => `<tr><td><span class="sw" style="background:${p.color}"></span></td>
+      ${[...scheme.plants, ...(opt.also || []).flatMap((k) => SCHEMES[k].plants.filter((p) => p.form !== 'foliage'))].map((p) => `<tr><td><span class="sw" style="background:${p.color}"></span></td>
         <td>${p.name}<em>${p.latin}</em></td><td class="h">${Math.round(p.share * 100)}% · ${Math.round(p.h * 100)} cm</td></tr>`).join('')}
     </tbody></table>
     <dl class="facts">

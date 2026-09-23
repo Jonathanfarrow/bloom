@@ -138,7 +138,8 @@ export class FlowerField {
       const silver = schemeOf(site.id) === 'lavender';
       for (const slot of site.slots) {
         let plant;
-        if (slot.band >= 0) plant = plants[slot.band % plants.length];
+        if (slot.scheme) plant = SCHEMES[slot.scheme].plants[Math.max(0, slot.band) % SCHEMES[slot.scheme].plants.length];
+        else if (slot.band >= 0) plant = plants[slot.band % plants.length];
         else {
           const x = slot.r * acc;
           plant = plants[cum.findIndex((cv) => x <= cv)] || plants[0];
@@ -152,7 +153,7 @@ export class FlowerField {
           push('foliage', slot.x, slot.y, slot.z, 0.7 * S, H, 0.7 * S, rot, 0, c, slot, fresh);
           continue;
         }
-        const leafCol = (silver ? SILVER_GREENS : LEAF_GREENS)[Math.floor(slot.r3 * 3.99) % 3];
+        const leafCol = (silver && !slot.scheme ? SILVER_GREENS : LEAF_GREENS)[Math.floor(slot.r3 * 3.99) % 3];
         const cushion = plant.form === 'spike' ? 1.5 : 1;
         push('leaf', slot.x, slot.y, slot.z, 0.34 * S * cushion, (0.2 + H * 0.35) * S * cushion, 0.34 * S * cushion, rot, 0, leafCol, slot, fresh);
         const headY = slot.y + H * form.at;

@@ -2,14 +2,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import './style.css';
-import { ROADS, PLACE_LABELS } from './data/town.js';
-import { SITES, SCHEMES, SITE_TYPES } from './data/sites.js';
-import { buildGround, buildStreets } from './world/ground.js';
+import { SITES, SCHEMES, SITE_TYPES, PLACE_LABELS } from './data/sites.js';
+import { buildGround, buildBridges } from './world/ground.js';
 import { buildTown } from './world/buildings.js';
 import { buildTrees } from './world/trees.js';
 import { buildSites } from './world/siteBuilder.js';
 import { FlowerField, flowerUniforms } from './world/flowers.js';
-import { groundHeight } from './world/util.js';
+import { groundHeight, streetNames, streetPath, MAJOR, HALF_W, HALF_H } from './world/geo.js';
 
 const $ = (s) => document.querySelector(s);
 const app = $('#app');
@@ -51,17 +50,17 @@ labelRenderer.domElement.className = 'label-layer labels-on';
 host.appendChild(labelRenderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(36, host.clientWidth / host.clientHeight, 1, 9000);
+const camera = new THREE.PerspectiveCamera(36, host.clientWidth / host.clientHeight, 1, 12000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.maxPolarAngle = 1.36;
 controls.minDistance = 10;
-controls.maxDistance = 1400;
+controls.maxDistance = 2600;
 controls.screenSpacePanning = false;
 controls.zoomToCursor = true;
 
-const HOME = { target: new THREE.Vector3(40, 0, -70), dist: 780, phi: 0.92, theta: 0.52 };
+const HOME = { target: new THREE.Vector3(80, 0, -60), dist: 1250, phi: 0.82, theta: 0.35 };
 function spherical(target, dist, phi, theta) {
   return new THREE.Vector3(
     target.x + dist * Math.sin(phi) * Math.sin(theta),
@@ -95,11 +94,11 @@ scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff1dc', 2.6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -260, right: 260, top: 260, bottom: -260, near: 10, far: 2000 });
+Object.assign(sun.shadow.camera, { left: -260, right: 260, top: 260, bottom: -260, near: 10, far: 3000 });
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.5;
 scene.add(sun, sun.target);
-scene.fog = new THREE.Fog('#d4e1e6', 1200, 3600);
+scene.fog = new THREE.Fog('#d4e1e6', 1800, 5200);
 const sunDir = new THREE.Vector3();
 
 let town;
@@ -131,14 +130,17 @@ const pins = new Map();
 const streetLabels = [];
 
 function build() {
-  ground = buildGround();
-  scene.add(ground);
-  scene.add(buildStreets());
+  const g = buildGround(renderer);
+  ground = g.ground;
+  scene.add(g.group);
   town = buildTown();
   scene.add(town.group);
-  scene.add(buildTrees(town.occ));
+  const br = buildBridges();
+  town.bridges = br.bridges;
+  scene.add(br.mesh);
   const built = buildSites(SITES, town);
   scene.add(built.mesh);
+  scene.add(buildTrees(town.occ));
   siteInfo = Object.fromEntries(built.sites.map((s) => [s.id, s]));
   const capacity = built.sites.reduce((n, s) => n + s.slots.length, 0) + 16;
   field = new FlowerField(capacity);
@@ -153,31 +155,33 @@ function build() {
     el.setAttribute('aria-label', site.name);
     el.addEventListener('click', (e) => { e.stopPropagation(); stopTour(); select(site.id); });
     const obj = new CSS2DObject(el);
-    const [x, z] = site.center;
-    obj.position.set(x, groundHeight(x, z) + (site.type === 'windowboxes' || site.type === 'baskets' ? 10 : 6), z);
+    const [x, z] = siteInfo[site.id].center;
+    obj.position.set(x, groundHeight(x, z) + (site.type === 'windowboxes' || site.type === 'baskets' ? 12 : 7), z);
     scene.add(obj);
     pins.set(site.id, { el, obj });
   }
-  for (const road of ROADS) {
-    if (!road.name || road.name === 'Churchyard') continue;
-    const pts = road.pts;
-    const mid = pts[Math.floor((pts.length - 1) / 2)], next = pts[Math.floor((pts.length - 1) / 2) + 1];
-    const x = (mid[0] + next[0]) / 2, z = (mid[1] + next[1]) / 2;
-    addLabel('street-label', road.name, x, z, 1.5);
+  // One label per street, at the middle of its longest stretch
+  for (const [name, segs] of streetNames()) {
+    if (!segs.some((sg) => MAJOR.has(sg.c) || sg.c === 'pedestrian')) continue;
+    const path = streetPath(name);
+    if (!path || path.length < 60) continue;
+    const mid = path.at(path.length / 2);
+    if (Math.abs(mid.x) > HALF_W - 60 || Math.abs(mid.z) > HALF_H - 60) continue;
+    addLabel('street-label', name, mid.x, mid.z, 1.5, path.length);
   }
-  for (const p of PLACE_LABELS) addLabel('place-label', p.text, p.at[0], p.at[1], 4);
+  for (const p of PLACE_LABELS) addLabel('place-label', p.text, p.at[0], p.at[1], 10);
   state.ideas.forEach(addIdeaPin);
   applyTheme();
 }
 
-function addLabel(cls, text, x, z, lift) {
+function addLabel(cls, text, x, z, lift, length = 0) {
   const el = document.createElement('div');
   el.className = cls;
   el.textContent = text;
   const obj = new CSS2DObject(el);
   obj.position.set(x, groundHeight(x, z) + lift, z);
   scene.add(obj);
-  streetLabels.push({ el, obj, place: cls === 'place-label' });
+  streetLabels.push({ el, obj, place: cls === 'place-label', length });
 }
 
 // ---------- Tweens ----------
@@ -201,9 +205,9 @@ function flyTo(target, dist, phi) {
   tweens[tweens.length - 1].camera = true;
 }
 function flyToSite(site) {
-  const [x, z] = site.center;
-  const dist = Math.min(360, Math.max(34, site.radius * 2.5));
-  flyTo(new THREE.Vector3(x, groundHeight(x, z), z), dist, site.radius > 60 ? 0.85 : 1.0);
+  const { center: [x, z], radius } = siteInfo[site.id];
+  const dist = Math.min(450, Math.max(75, radius * 2.8));
+  flyTo(new THREE.Vector3(x, groundHeight(x, z), z), dist, radius > 60 ? 0.85 : 1.0);
 }
 
 function setBloom(on) {
@@ -363,7 +367,9 @@ function hint(text, ms = 4000) {
 }
 function nearestStreet(x, z) {
   let best = null, bd = Infinity;
-  for (const [name, path] of town.roadPaths) {
+  for (const name of streetNames().keys()) {
+    const path = streetPath(name);
+    if (!path || path.length < 2) continue;
     const p = path.at(path.closestT(x, z));
     const d = Math.hypot(p.x - x, p.z - z);
     if (d < bd) { bd = d; best = name; }
@@ -472,8 +478,9 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (state.suggesting) return openIdeaForm(x, z);
   let best = null, bd = Infinity;
   for (const s of SITES) {
-    const d = Math.hypot(s.center[0] - x, s.center[1] - z);
-    if (d < Math.max(12, s.radius * 0.6) && d < bd) { bd = d; best = s; }
+    const { center, radius } = siteInfo[s.id];
+    const d = Math.hypot(center[0] - x, center[1] - z);
+    if (d < Math.max(14, radius * 0.7) && d < bd) { bd = d; best = s; }
   }
   if (best && best.id !== state.selected) select(best.id);
 });
@@ -514,15 +521,15 @@ function frame() {
     tw.apply(tw.t);
     if (tw.t >= 1) { tweens.splice(i, 1); tw.done?.(); }
   }
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x, -700, 800);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z, -700, 700);
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x, -HALF_W, HALF_W);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z, -HALF_H, HALF_H);
   controls.update();
   flowerUniforms.uTime.value += reduceMotion ? 0 : dt;
 
   // Keep the shadow frustum centred on what we're looking at
   const T = controls.target;
   const camDist = camera.position.distanceTo(T);
-  const extent = THREE.MathUtils.clamp(camDist * 0.55, 60, 420);
+  const extent = THREE.MathUtils.clamp(camDist * 0.6, 60, 700);
   const sc = sun.shadow.camera;
   if (Math.abs(sc.right - extent) > 1) {
     sc.left = sc.bottom = -extent; sc.right = sc.top = extent; sc.updateProjectionMatrix();
@@ -530,12 +537,13 @@ function frame() {
   const snap = extent / 1024;
   tmpV.set(Math.round(T.x / snap) * snap, 0, Math.round(T.z / snap) * snap);
   sun.target.position.copy(tmpV);
-  sun.position.copy(tmpV).addScaledVector(sunDir, 900);
+  sun.position.copy(tmpV).addScaledVector(sunDir, 1400);
 
-  for (const p of pins.values()) p.el.classList.toggle('near', camera.position.distanceTo(p.obj.position) < 420);
+  for (const p of pins.values()) p.el.classList.toggle('near', camera.position.distanceTo(p.obj.position) < 520);
   for (const l of streetLabels) {
     const d = camera.position.distanceTo(l.obj.position);
-    const o = l.place ? THREE.MathUtils.clamp(1 - (d - 900) / 500, 0, 1) : THREE.MathUtils.clamp(1 - (d - 380) / 380, 0, 1);
+    const reach = l.place ? 1500 : 220 + Math.min(l.length, 700) * 0.7;
+    const o = THREE.MathUtils.clamp(1 - (d - reach) / (reach * 0.4), 0, 1);
     if (!state.labels) l.el.style.opacity = '0';
     else l.el.style.opacity = o.toFixed(2);
   }

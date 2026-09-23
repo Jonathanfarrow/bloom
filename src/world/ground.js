@@ -1,9 +1,7 @@
 import * as THREE from 'three';
-import { ROADS, RIVER, GREENS, PLAZA, ROUNDABOUT, HILL } from '../data/town.js';
 import { Batch, col } from './batch.js';
-import { groundHeight, Path } from './util.js';
-
-const Y = { bank: 0.03, water: 0.045, green: 0.03, pave: 0.06, verge: 0.075, road: 0.095, line: 0.11, plaza: 0.085 };
+import { DATA, HALF_W, HALF_H, groundHeight, ROAD_WIDTH, MAJOR } from './geo.js';
+import { Path } from './util.js';
 
 function hash(x, z) {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
@@ -16,170 +14,175 @@ function vnoise(x, z) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
-const FIELD_COLOURS = ['#8db463', '#a4bd66', '#c8bf78', '#7aa35a', '#b3b778', '#96b66a', '#d2c68a'].map(col);
+// Land-use colours for the painted ground
+const LAND = {
+  park: '#86b85c', recreation_ground: '#86b85c', village_green: '#86b85c', garden: '#8cbc62', grass: '#8fbd63',
+  pitch: '#74ad4d', playground: '#d9c08f', stadium: '#74ad4d', golf_course: '#8fc566',
+  wood: '#5f8f45', forest: '#5f8f45', scrub: '#7e9d57', meadow: '#a4bf6b', grassland: '#a1bd69', heath: '#9fae6b',
+  farmland: '#c6c07e', farmyard: '#bdb393', orchard: '#9cbb66', allotments: '#a9b96c',
+  cemetery: '#86a868', grave_yard: '#86a868', religious: '#a9b98f',
+  retail: '#c3bcae', commercial: '#c3bcae', industrial: '#bdb7aa', railway: '#b9ae9c', construction: '#c9b894', garages: '#c2bcb1',
+  school: '#c6c9a6', college: '#c6c9a6', university: '#c6c9a6', kindergarten: '#c6c9a6', hospital: '#d0cbbc',
+  pedestrian: '#d8ccb2', parking: '#b3aea4', water_park: '#9cc7d6',
+};
 
-export function buildGround() {
-  const size = 2600, seg = 300;
-  const g = new THREE.PlaneGeometry(size, size, seg, seg);
+const PATHS = new Set(['footway', 'path', 'cycleway', 'steps', 'bridleway', 'track']);
+
+function paintGround(pxPerM) {
+  const W = Math.round(HALF_W * 2 * pxPerM), H = Math.round(HALF_H * 2 * pxPerM);
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.setTransform(pxPerM, 0, 0, pxPerM, HALF_W * pxPerM, HALF_H * pxPerM);
+  const poly = (pts) => { g.beginPath(); pts.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); g.closePath(); };
+  const line = (pts) => { g.beginPath(); pts.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); };
+
+  // Grass base with a soft mottle
+  g.fillStyle = '#8cb766';
+  g.fillRect(-HALF_W, -HALF_H, HALF_W * 2, HALF_H * 2);
+  for (let i = 0; i < 9000; i++) {
+    const x = -HALF_W + Math.random() * HALF_W * 2, z = -HALF_H + Math.random() * HALF_H * 2;
+    g.fillStyle = vnoise(x / 60, z / 60) > 0.5 ? 'rgba(170,190,100,0.10)' : 'rgba(70,120,50,0.10)';
+    g.beginPath(); g.arc(x, z, 6 + Math.random() * 14, 0, Math.PI * 2); g.fill();
+  }
+
+  // Land use, biggest first so small features sit on top
+  const areaOf = (p) => { let a = 0; for (let i = 0, j = p.length - 1; i < p.length; j = i++) a += (p[j][0] + p[i][0]) * (p[j][1] - p[i][1]); return Math.abs(a / 2); };
+  const land = DATA.land.filter((l) => LAND[l.c]).sort((a, b) => areaOf(b.p) - areaOf(a.p));
+  for (const l of land) {
+    poly(l.p);
+    g.fillStyle = LAND[l.c];
+    g.fill();
+    if (l.c === 'farmland' || l.c === 'allotments') {
+      g.save(); g.clip();
+      g.strokeStyle = 'rgba(90,80,40,0.12)'; g.lineWidth = l.c === 'allotments' ? 1.2 : 2;
+      const [x0, z0] = l.p[0], ang = hash(x0, z0) * Math.PI, sp = l.c === 'allotments' ? 4 : 6;
+      for (let k = -900; k < 900; k += sp) {
+        g.beginPath();
+        g.moveTo(x0 - Math.cos(ang) * 900 - Math.sin(ang) * k, z0 - Math.sin(ang) * 900 + Math.cos(ang) * k);
+        g.lineTo(x0 + Math.cos(ang) * 900 - Math.sin(ang) * k, z0 + Math.sin(ang) * 900 + Math.cos(ang) * k);
+        g.stroke();
+      }
+      g.restore();
+    }
+    if (l.c === 'pitch') { g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 0.35; g.stroke(); }
+  }
+
+  // Water: banks, then open water
+  g.lineCap = g.lineJoin = 'round';
+  const ww = (w) => (w.c === 'river' ? 6 : w.c === 'stream' ? 3 : 1.6);
+  for (const w of DATA.water.lines) { line(w.p); g.strokeStyle = '#5e8a47'; g.lineWidth = ww(w) + 3; g.stroke(); }
+  for (const w of DATA.water.areas) { poly(w.p); g.fillStyle = w.c === 'swimming_pool' ? '#7fc6dc' : '#4f8fae'; g.fill(); }
+  for (const w of DATA.water.lines) { line(w.p); g.strokeStyle = '#4f8fae'; g.lineWidth = ww(w); g.stroke(); }
+
+  // Railways: ballast then rails
+  const rails = DATA.segments.filter((s) => s.t === 'rail' && !s.tunnel);
+  for (const s of rails) { line(s.p); g.strokeStyle = '#998e80'; g.lineWidth = 4.2; g.stroke(); }
+  for (const s of rails) {
+    line(s.p); g.strokeStyle = '#655d56'; g.lineWidth = 1.7; g.stroke();
+    line(s.p); g.strokeStyle = '#a1968a'; g.lineWidth = 1.1; g.stroke();
+  }
+
+  const roads = DATA.segments.filter((s) => s.t === 'road' && !s.tunnel);
+  for (const s of roads) {
+    if (!PATHS.has(s.c)) continue;
+    line(s.p); g.strokeStyle = s.c === 'track' ? '#bda985' : '#d8caa9'; g.lineWidth = ROAD_WIDTH[s.c] || 1.8; g.stroke();
+  }
+  const streets = roads.filter((s) => !PATHS.has(s.c));
+  for (const s of streets) {
+    if (!MAJOR.has(s.c)) continue;
+    line(s.p); g.strokeStyle = '#cfc8ba'; g.lineWidth = (ROAD_WIDTH[s.c] || 6) + 4.2; g.stroke();
+  }
+  const order = ['pedestrian', 'service', 'unknown', 'living_street', 'residential', 'unclassified', 'tertiary', 'secondary', 'primary', 'trunk'];
+  for (const s of streets.slice().sort((a, b) => order.indexOf(a.c) - order.indexOf(b.c))) {
+    line(s.p);
+    g.strokeStyle = s.c === 'pedestrian' ? '#dcd2bd' : s.c === 'service' ? '#85817b' : '#6d6a66';
+    g.lineWidth = ROAD_WIDTH[s.c] || 5;
+    g.stroke();
+  }
+  g.setLineDash([3, 4.5]); g.strokeStyle = 'rgba(245,242,232,0.85)'; g.lineWidth = 0.18;
+  for (const s of streets) if (['primary', 'secondary', 'tertiary', 'trunk'].includes(s.c)) { line(s.p); g.stroke(); }
+  g.setLineDash([]);
+
+  // Soft footprint under every building so the wall bases look grounded
+  g.fillStyle = 'rgba(80,70,60,0.35)';
+  for (const b of DATA.buildings) { poly(b.p); g.fill(); }
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function buildGround(renderer) {
+  const group = new THREE.Group();
+  const small = Math.min(window.innerWidth, window.innerHeight) < 700;
+  const tex = paintGround(small ? 1.05 : 1.55);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  const step = 8;
+  const g = new THREE.PlaneGeometry(HALF_W * 2, HALF_H * 2, Math.round((HALF_W * 2) / step), Math.round((HALF_H * 2) / step));
   g.rotateX(-Math.PI / 2);
   const p = g.attributes.position;
-  const colors = new Float32Array(p.count * 3);
-  const town = col('#86ad5f'), lush = col('#79a653'), dry = col('#9bb56c');
-  const c = new THREE.Color(), tmp = new THREE.Color();
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), z = p.getZ(i);
-    p.setY(i, groundHeight(x, z) - 0.02);
-    const n = vnoise(x / 40, z / 40) * 0.6 + vnoise(x / 9, z / 9) * 0.4;
-    c.copy(town).lerp(n > 0.5 ? dry : lush, Math.abs(n - 0.5) * 1.4);
-    // Patchwork farmland beyond the town
-    const r = Math.hypot(x - 40, z + 20);
-    if (r > 640) {
-      const wob = vnoise(x / 60, z / 60) * 40;
-      const fx = Math.floor((x + wob) / 150), fz = Math.floor((z - wob) / 115);
-      tmp.copy(FIELD_COLOURS[Math.floor(hash(fx, fz) * FIELD_COLOURS.length)]);
-      const stripe = Math.sin((x * 0.7 + z * 0.3) * (hash(fz, fx) > 0.5 ? 1 : 0.4)) * 0.03;
-      tmp.offsetHSL(0, 0, stripe);
-      c.lerp(tmp, Math.min(1, (r - 640) / 120));
-    }
-    const hd = Math.hypot(x - HILL.x, z - HILL.z);
-    if (hd < 130) c.lerp(lush, (1 - hd / 130) * 0.5);
-    colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  for (let i = 0; i < p.count; i++) p.setY(i, groundHeight(p.getX(i), p.getZ(i)));
   g.computeVertexNormals();
-  const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }));
-  mesh.receiveShadow = true;
-  mesh.name = 'ground';
-  return mesh;
+  const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+  ground.receiveShadow = true;
+  ground.name = 'ground';
+  group.add(ground);
+
+  // Patchwork countryside beyond the mapped area
+  const outer = new THREE.PlaneGeometry(9000, 9000, 180, 180);
+  outer.rotateX(-Math.PI / 2);
+  const op = outer.attributes.position;
+  const colors = new Float32Array(op.count * 3);
+  const FIELDS = ['#8db463', '#a4bd66', '#c8bf78', '#7aa35a', '#b3b778', '#96b66a', '#d2c68a'].map(col);
+  const c = new THREE.Color();
+  for (let i = 0; i < op.count; i++) {
+    const x = op.getX(i), z = op.getZ(i);
+    const beyond = Math.max(0, Math.max(Math.abs(x) / HALF_W, Math.abs(z) / HALF_H) - 1);
+    op.setY(i, groundHeight(x, z) - 0.8 + beyond * 30 * (vnoise(x / 700, z / 700) - 0.4));
+    const wob = vnoise(x / 80, z / 80) * 50;
+    c.copy(FIELDS[Math.floor(hash(Math.floor((x + wob) / 190), Math.floor((z - wob) / 150)) * FIELDS.length)]);
+    colors.set([c.r, c.g, c.b], i * 3);
+  }
+  outer.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  outer.computeVertexNormals();
+  const outerMesh = new THREE.Mesh(outer, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
+  outerMesh.receiveShadow = true;
+  group.add(outerMesh);
+
+  return { group, ground };
 }
 
-function densify(pts, step = 5) {
-  const out = [pts[0]];
-  for (let i = 1; i < pts.length; i++) {
-    const [x0, z0] = pts[i - 1], [x1, z1] = pts[i];
-    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / step));
-    for (let k = 1; k <= n; k++) out.push([x0 + ((x1 - x0) * k) / n, z0 + ((z1 - z0) * k) / n]);
-  }
-  return out;
-}
-
-// Ribbon between two offsets from a polyline, draped over the terrain.
-export function ribbon(batch, pts, o0, o1, y, color) {
-  const d = densify(pts);
-  const norms = d.map((p, i) => {
-    const a = d[Math.max(0, i - 1)], b = d[Math.min(d.length - 1, i + 1)];
-    let nx = -(b[1] - a[1]), nz = b[0] - a[0];
-    const l = Math.hypot(nx, nz) || 1;
-    return [nx / l, nz / l];
-  });
-  const up = [0, 1, 0];
-  for (let i = 1; i < d.length; i++) {
-    const v = (j, o) => {
-      const x = d[j][0] + norms[j][0] * o, z = d[j][1] + norms[j][1] * o;
-      return [x, groundHeight(x, z) + y, z];
-    };
-    batch.quad(v(i - 1, o0), v(i - 1, o1), v(i, o1), v(i, o0), color, null, up);
-  }
-}
-
-function disc(batch, x, z, r, y, color, seg = 24) {
-  const up = [0, 1, 0];
-  for (let i = 0; i < seg; i++) {
-    const a0 = (i / seg) * Math.PI * 2, a1 = ((i + 1) / seg) * Math.PI * 2;
-    const p = (a) => { const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r; return [px, groundHeight(px, pz) + y, pz]; };
-    batch.tri([x, groundHeight(x, z) + y, z], p(a0), p(a1), color, undefined, up);
-  }
-}
-
-function paintTexture() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const x = c.getContext('2d');
-  x.fillStyle = '#fff'; x.fillRect(0, 0, 128, 128);
-  // York-stone style flags
-  x.strokeStyle = 'rgba(80,70,55,0.35)'; x.lineWidth = 2;
-  for (let r = 0; r < 4; r++) {
-    const off = (r % 2) * 20;
-    x.beginPath(); x.moveTo(0, r * 32); x.lineTo(128, r * 32); x.stroke();
-    for (let k = -1; k < 4; k++) { x.beginPath(); x.moveTo(off + k * 40, r * 32); x.lineTo(off + k * 40, r * 32 + 32); x.stroke(); }
-  }
-  for (let i = 0; i < 400; i++) {
-    x.fillStyle = `rgba(0,0,0,${Math.random() * 0.06})`;
-    x.fillRect(Math.random() * 128, Math.random() * 128, 3, 3);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
-}
-
-export function buildStreets() {
-  const group = new THREE.Group();
-  const flat = new Batch();
-  const asphalt = col('#6a6763'), resAsphalt = col('#77736e'), pavement = col('#cbc3b4'), verge = col('#6e9d4c');
-  const line = col('#efeae0'), water = col('#4d8ea6'), bank = col('#5f8a45'), green = col('#74a24f');
-
-  for (const g of GREENS) {
-    const s = new THREE.Shape(g.pts.map(([x, z]) => new THREE.Vector2(x, -z)));
-    const sg = new THREE.ShapeGeometry(s);
-    sg.rotateX(-Math.PI / 2);
-    sg.translate(0, Y.green, 0);
-    flat.add(sg, new THREE.Matrix4(), green);
-    sg.dispose();
-  }
-
-  // River
-  ribbon(flat, RIVER.pts, -RIVER.w / 2 - 2.2, RIVER.w / 2 + 2.2, Y.bank, bank);
-  const waterBatch = new Batch();
-  ribbon(waterBatch, RIVER.pts, -RIVER.w / 2, RIVER.w / 2, Y.water, water);
-
-  for (const r of ROADS) {
-    const half = r.w / 2, pave = r.pave ?? (r.res ? 2 : 2.5);
-    ribbon(flat, r.pts, -half - pave, half + pave, Y.pave, pavement);
-    if (r.verge) {
-      ribbon(flat, r.pts, half + 0.3, half + pave - 3.5, Y.verge, verge);
-      ribbon(flat, r.pts, -half - pave + 3.5, -half - 0.3, Y.verge, verge);
-    }
-    ribbon(flat, r.pts, -half, half, Y.road, r.res ? resAsphalt : asphalt);
-    for (const end of [r.pts[0], r.pts[r.pts.length - 1]]) {
-      disc(flat, end[0], end[1], half + pave, Y.pave - 0.004, pavement);
-      disc(flat, end[0], end[1], half, Y.road - 0.004, r.res ? resAsphalt : asphalt);
-    }
-    // Dashed centre line on the main streets
-    if (!r.res && r.w >= 10 && r.name !== 'Churchyard') {
-      const path = new Path(r.pts);
-      for (let t = 14; t < path.length - 14; t += 7) {
-        const a = path.at(t), b = path.at(Math.min(path.length, t + 3));
-        ribbon(flat, [[a.x, a.z], [b.x, b.z]], -0.1, 0.1, Y.line, line);
+// Raised decks and stone parapets wherever a street crosses water or a path.
+export function buildBridges() {
+  const b = new Batch();
+  const deck = col('#b7ab94'), parapet = col('#cdc2aa');
+  const bridges = [];
+  for (const s of DATA.segments) {
+    if (!s.bridge || s.t !== 'road') continue;
+    const path = new Path(s.p);
+    if (path.length < 2) continue;
+    const w = Math.max(3, (ROAD_WIDTH[s.c] || 5) + (MAJOR.has(s.c) ? 3 : 1));
+    const pts = [];
+    const n = Math.max(1, Math.ceil(path.length / 2));
+    for (let k = 0; k <= n; k++) pts.push(path.at((path.length * k) / n));
+    const y0 = groundHeight(pts[0].x, pts[0].z), y1 = groundHeight(pts[n].x, pts[n].z);
+    const yAt = (k) => y0 + (y1 - y0) * (k / n) + 0.28;
+    for (let k = 1; k <= n; k++) {
+      const a = pts[k - 1], c2 = pts[k];
+      const A = (o) => [a.x + a.nx * o, yAt(k - 1), a.z + a.nz * o];
+      const C = (o) => [c2.x + c2.nx * o, yAt(k), c2.z + c2.nz * o];
+      b.quad(A(-w / 2), A(w / 2), C(w / 2), C(-w / 2), deck, null, [0, 1, 0]);
+      const len = Math.hypot(c2.x - a.x, c2.z - a.z), ang = Math.atan2(c2.z - a.z, c2.x - a.x);
+      for (const side of [-1, 1]) {
+        const mx = (a.x + c2.x) / 2 + a.nx * side * (w / 2), mz = (a.z + c2.z) / 2 + a.nz * side * (w / 2);
+        b.box(len + 0.06, 1.05, 0.42, mx, (yAt(k - 1) + yAt(k)) / 2 - 0.1, mz, -ang, parapet);
       }
     }
+    bridges.push({ name: s.n, cls: s.c, path, width: w, y0, y1 });
   }
-
-  // Roundabout
-  disc(flat, ROUNDABOUT.x, ROUNDABOUT.z, ROUNDABOUT.r + 2.5, Y.pave + 0.01, pavement, 40);
-  disc(flat, ROUNDABOUT.x, ROUNDABOUT.z, ROUNDABOUT.r, Y.road + 0.01, asphalt, 40);
-  disc(flat, ROUNDABOUT.x, ROUNDABOUT.z, ROUNDABOUT.island + 0.5, Y.line + 0.02, pavement, 40);
-  disc(flat, ROUNDABOUT.x, ROUNDABOUT.z, ROUNDABOUT.island, Y.line + 0.05, green, 40);
-
-  const flatMesh = new THREE.Mesh(flat.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }));
-  flatMesh.receiveShadow = true;
-  group.add(flatMesh);
-
-  const waterMesh = new THREE.Mesh(waterBatch.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.12, metalness: 0.1, side: THREE.DoubleSide }));
-  waterMesh.receiveShadow = true;
-  group.add(waterMesh);
-
-  // Market Place paving
-  const w = PLAZA.x1 - PLAZA.x0 + 5, d = PLAZA.z1 - PLAZA.z0 + 5;
-  const pg = new THREE.PlaneGeometry(w, d);
-  pg.rotateX(-Math.PI / 2);
-  const uv = pg.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / 8), uv.getY(i) * (d / 8));
-  const plaza = new THREE.Mesh(pg, new THREE.MeshStandardMaterial({ color: '#dcd1bd', map: paintTexture(), roughness: 0.9 }));
-  plaza.position.set((PLAZA.x0 + PLAZA.x1) / 2, Y.plaza + 0.02, (PLAZA.z0 + PLAZA.z1) / 2);
-  plaza.receiveShadow = true;
-  group.add(plaza);
-
-  return group;
+  const mesh = new THREE.Mesh(b.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }));
+  mesh.castShadow = mesh.receiveShadow = true;
+  return { mesh, bridges };
 }

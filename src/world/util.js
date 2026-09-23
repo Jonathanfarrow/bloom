@@ -1,5 +1,3 @@
-import { HILL } from '../data/town.js';
-
 export function rng(seed = 1) {
   let a = seed >>> 0;
   return () => {
@@ -11,10 +9,6 @@ export function rng(seed = 1) {
   };
 }
 
-export function groundHeight(x, z) {
-  const dx = x - HILL.x, dz = z - HILL.z;
-  return HILL.h * Math.exp(-(dx * dx + dz * dz) / (2 * HILL.sigma * HILL.sigma));
-}
 
 // Polyline helper: cumulative lengths, point + direction at distance t.
 export class Path {

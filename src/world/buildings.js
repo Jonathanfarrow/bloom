@@ -1,22 +1,22 @@
 import * as THREE from 'three';
-import { ROADS, PLAZA, GREENS, RIVER, HILL, LANDMARKS, BRIDGES, ROUNDABOUT } from '../data/town.js';
 import { Batch, col } from './batch.js';
 import { Occupancy } from './occupancy.js';
-import { groundHeight, Path, pointInPoly, rng } from './util.js';
+import { DATA, HALF_W, HALF_H, groundHeight, ROAD_WIDTH, MAJOR } from './geo.js';
+import { rng } from './util.js';
 
 const FLOOR = 3.2, BAY = 3.5, TEX_CELLS = 4;
 
-const WALLS = [
-  ['#a8533d', 3], ['#b8674b', 3], ['#9b4a38', 2], ['#c0775a', 2],
-  ['#eee6d4', 4], ['#f3efe6', 3], ['#e9dcc0', 2], ['#e8d49c', 1.5],
-  ['#e5bcaa', 1], ['#cbd5bf', 1], ['#c9d6de', 0.8], ['#d9cbb3', 1.5],
-];
-const ROOFS = [['#8f4633', 3], ['#9e5237', 2], ['#7d3f2e', 2], ['#51575f', 2], ['#5d636b', 2], ['#474c53', 1]];
+const BRICK = [['#a8533d', 3], ['#b8674b', 3], ['#9b4a38', 2], ['#c0775a', 2], ['#b06a4f', 2], ['#8f5140', 1]];
+const RENDER = [['#eee6d4', 4], ['#f3efe6', 3], ['#e9dcc0', 2], ['#e8d49c', 1.2], ['#e5bcaa', 0.8], ['#cbd5bf', 0.8], ['#c9d6de', 0.6], ['#d9cbb3', 1.5]];
+const TILE = [['#8f4633', 3], ['#9e5237', 2], ['#7d3f2e', 2], ['#51575f', 2], ['#5d636b', 2], ['#474c53', 1]];
+const FLAT = [['#8b8d8c', 2], ['#9c9a93', 2], ['#77797a', 1], ['#a8a49a', 1]];
+const HOMES = new Set(['house', 'semidetached_house', 'detached', 'residential', 'terrace', 'bungalow', 'apartments', 'dormitory', 'farm']);
+const SMALL = new Set(['garage', 'garages', 'shed', 'roof', 'carport', 'hut', 'greenhouse', 'kiosk', 'service', 'toilets']);
 
 function pick(list, r) {
   const total = list.reduce((s, [, w]) => s + w, 0);
   let x = r() * total;
-  for (const [v, w] of list) { if ((x -= w) <= 0) return v; }
+  for (const [v, w] of list) if ((x -= w) <= 0) return v;
   return list[0][0];
 }
 
@@ -39,7 +39,6 @@ function facadeTextures(shop) {
       const ground = shop && row === 0;
       const wx = x0 + cell * (ground ? 0.1 : 0.3), ww = cell * (ground ? 0.8 : 0.4);
       const wy = yTop + cell * (ground ? 0.3 : 0.22), wh = cell * (ground ? 0.58 : 0.48);
-      // frame + glass
       b.fillStyle = ground ? '#2f3a37' : '#f7f5ef';
       b.fillRect(wx - 5, wy - 5, ww + 10, wh + 10);
       b.fillStyle = '#35434d'; b.fillRect(wx, wy, ww, wh);
@@ -50,10 +49,9 @@ function facadeTextures(shop) {
         b.fillRect(wx, wy + wh / 2 - 2, ww, 4);
         b.fillStyle = '#e4ded2'; b.fillRect(wx - 9, wy + wh + 5, ww + 18, 7);
       } else {
-        // fascia sign band
         b.fillStyle = 'rgba(40,50,48,0.85)'; b.fillRect(x0 + cell * 0.06, yTop + cell * 0.08, cell * 0.88, cell * 0.14);
       }
-      const lit = r() < (ground ? 0.85 : 0.55);
+      const lit = r() < (ground ? 0.85 : 0.5);
       g.fillStyle = lit ? (r() < 0.5 ? '#ffc76e' : '#ffdca0') : '#1a1408';
       g.fillRect(wx, wy, ww, wh);
     }
@@ -91,240 +89,156 @@ function frame(cx, cz, a) {
   };
 }
 
-// Adds a building to `walls` and `roofs` batches. Returns its front wall.
-export function addBuilding(walls, roofs, props, o) {
-  const { cx, cz, a, w, d, h, roof = 'gable', wall, roofColor, chimney = 0 } = o;
-  const base = o.base ?? groundHeight(cx, cz);
-  const f = frame(cx, cz, a);
-  const y0 = base - 1.5, y1 = base + h;
-  const C = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]];
-  const N = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-  const wc = col(wall), rc = col(roofColor);
-  const U = BAY * TEX_CELLS, V = FLOOR * TEX_CELLS;
-  const vb = (y0 - base) / V, vt = h / V;
-  for (let i = 0; i < 4; i++) {
-    const A = C[i], B = C[(i + 1) % 4];
-    const L = Math.hypot(B[0] - A[0], B[1] - A[1]);
-    const n = f.dir(N[i][0], N[i][1]);
-    walls.quad(f.p(A[0], A[1], y0), f.p(B[0], B[1], y0), f.p(B[0], B[1], y1), f.p(A[0], A[1], y1), wc,
-      [[0, vb], [L / U, vb], [L / U, vt], [0, vt]], n);
-  }
-  const ov = 0.35;
-  const along = roof === 'gableX' ? 'z' : 'x';
-  if (roof === 'flat') {
-    roofs.quad(f.p(-w / 2, -d / 2, y1), f.p(w / 2, -d / 2, y1), f.p(w / 2, d / 2, y1), f.p(-w / 2, d / 2, y1), rc.clone().offsetHSL(0, -0.1, 0.1),
-      [[0, 0], [w / 3, 0], [w / 3, d / 3], [0, d / 3]], [0, 1, 0]);
-  } else if (along === 'x') {
-    const rh = o.rh ?? Math.min(d * 0.42, 4.6);
-    const hip = roof === 'hip' ? Math.min(d / 2, w / 2 - 0.5) : 0;
-    const R0 = f.p(-w / 2 - ov + hip, 0, y1 + rh), R1 = f.p(w / 2 + ov - hip, 0, y1 + rh);
-    const e = (lx, lz) => f.p(lx, lz, y1 - 0.25);
-    const S = Math.hypot(d / 2 + ov, rh);
-    const uvs = [[0, 0], [w / 3, 0], [w / 3, S / 1.2], [0, S / 1.2]];
-    roofs.quad(e(-w / 2 - ov, -d / 2 - ov), e(w / 2 + ov, -d / 2 - ov), R1, R0, rc, uvs);
-    roofs.quad(e(w / 2 + ov, d / 2 + ov), e(-w / 2 - ov, d / 2 + ov), R0, R1, rc, uvs);
-    if (hip) {
-      roofs.tri(e(-w / 2 - ov, d / 2 + ov), e(-w / 2 - ov, -d / 2 - ov), R0, rc, [[0, 0], [d / 3, 0], [d / 6, S / 1.2]]);
-      roofs.tri(e(w / 2 + ov, -d / 2 - ov), e(w / 2 + ov, d / 2 + ov), R1, rc, [[0, 0], [d / 3, 0], [d / 6, S / 1.2]]);
-    } else {
-      for (const sx of [-1, 1]) {
-        const x = (sx * w) / 2;
-        const u0 = 0, u1 = d / U;
-        walls.tri(f.p(x, -d / 2, y1), f.p(x, d / 2, y1), f.p(x, 0, y1 + rh), wc,
-          [[u0, vt], [u1, vt], [u1 / 2, vt + rh / V]], f.dir(sx, 0));
-      }
-    }
-    if (chimney) {
-      const cx2 = (w / 2 - 1.2) * (chimney > 0.5 ? 1 : -1);
-      const p = f.p(cx2, 0, y1 + rh - 0.6);
-      props.box(0.9, 2.0, 1.3, p[0], p[1], p[2], -a, col('#8a4535'));
-    }
-  } else {
-    const rh = o.rh ?? Math.min(w * 0.42, 4.6);
-    const R0 = f.p(0, -d / 2 - ov, y1 + rh), R1 = f.p(0, d / 2 + ov, y1 + rh);
-    const e = (lx, lz) => f.p(lx, lz, y1 - 0.25);
-    const S = Math.hypot(w / 2 + ov, rh);
-    const uvs = [[0, 0], [d / 3, 0], [d / 3, S / 1.2], [0, S / 1.2]];
-    roofs.quad(e(-w / 2 - ov, d / 2 + ov), e(-w / 2 - ov, -d / 2 - ov), R0, R1, rc, uvs);
-    roofs.quad(e(w / 2 + ov, -d / 2 - ov), e(w / 2 + ov, d / 2 + ov), R1, R0, rc, uvs);
-    for (const sz of [-1, 1]) {
-      const z = (sz * d) / 2;
-      walls.tri(f.p(-w / 2, z, y1), f.p(w / 2, z, y1), f.p(0, z, y1 + rh), wc,
-        [[0, vt], [w / U, vt], [w / U / 2, vt + rh / V]], f.dir(0, sz));
-    }
-  }
-  return { base, h, floors: Math.round(h / FLOOR), A: C, frame: f, a, w, d, cx, cz };
+const U = BAY * TEX_CELLS, V = FLOOR * TEX_CELLS;
+
+function wall(batch, A, B, base, y0, y1, normal, color, edges) {
+  const L = Math.hypot(B[0] - A[0], B[1] - A[1]);
+  const vb = (y0 - base) / V, vt = (y1 - base) / V;
+  batch.quad([A[0], y0, A[1]], [B[0], y0, B[1]], [B[0], y1, B[1]], [A[0], y1, A[1]], color,
+    [[0, vb], [L / U, vb], [L / U, vt], [0, vt]], normal);
+  if (edges && L > 2.5) edges.push({ A, B, n: [normal[0], normal[2]], base, top: y1, L });
 }
 
-// ---------- Town layout ----------
-export function buildTown() {
-  const occ = new Occupancy();
-  const r = rng(20240601);
-  const roadPaths = new Map();
-
-  // 1 = roads, 2 = parks/water, 3 = landmarks & reserved
-  for (const road of ROADS) {
-    const pave = road.pave ?? (road.res ? 2 : 2.5);
-    occ.markPolyline(road.pts, road.w / 2 + pave + 0.6, 1);
-    if (road.name) roadPaths.set(road.name, new Path(road.pts));
+// Rectangular building with a pitched (gabled or hipped) roof.
+export function pitched(walls, roofs, props, o, edges) {
+  const { cx, cz, a, w, d, eaves, roof, wall: wallCol, roofColor, chimney, base } = o;
+  const f = frame(cx, cz, a);
+  const y0 = base - 2, y1 = base + eaves;
+  const C = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]];
+  const N = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  const wc = col(wallCol), rc = col(roofColor);
+  for (let i = 0; i < 4; i++) {
+    const A = f.p(...C[i], 0), B = f.p(...C[(i + 1) % 4], 0);
+    wall(walls, [A[0], A[2]], [B[0], B[2]], base, y0, y1, f.dir(...N[i]), wc, edges);
   }
-  occ.markPolyline(RIVER.pts, RIVER.w / 2 + 8, 2);
-  for (const g of GREENS) occ.markPoly(g.pts, 2, (x, z) => pointInPoly(x, z, g.pts));
-  occ.markPoly([[PLAZA.x0 - 1, PLAZA.z0 - 1], [PLAZA.x1 + 1, PLAZA.z1 + 1]], 1, () => true);
-  occ.markPoly([[HILL.x - HILL.keepOut, HILL.z - HILL.keepOut], [HILL.x + HILL.keepOut, HILL.z + HILL.keepOut]], 2,
-    (x, z) => Math.hypot(x - HILL.x, z - HILL.z) < HILL.keepOut);
-  occ.markPoly([[ROUNDABOUT.x - 26, ROUNDABOUT.z - 26], [ROUNDABOUT.x + 26, ROUNDABOUT.z + 26]], 1,
-    (x, z) => Math.hypot(x - ROUNDABOUT.x, z - ROUNDABOUT.z) < ROUNDABOUT.r + 4);
-  for (const L of Object.values(LANDMARKS)) occ.markRect(L.c[0], L.c[1], L.size[0], L.size[1], 0, 3, 3);
-  // Keep the fronts of the Town Hall and British Schools clear for their beds
-  occ.markRect(-82, -160, 8, 34, 0, 3);
-  occ.markRect(235, -10, 16, 36, 0, 3);
+  const ov = 0.3, rh = o.rh ?? Math.min(d * 0.42, 4.2);
+  const e = (lx, lz) => f.p(lx, lz, y1 - 0.2);
+  const S = Math.hypot(d / 2 + ov, rh), vt = eaves / V;
+  const hip = roof === 'hipped' ? Math.min(d / 2, w / 2 - 0.4) : 0;
+  const R0 = f.p(-w / 2 - ov + hip, 0, y1 + rh), R1 = f.p(w / 2 + ov - hip, 0, y1 + rh);
+  const uvs = [[0, 0], [w / 3, 0], [w / 3, S / 1.2], [0, S / 1.2]];
+  roofs.quad(e(-w / 2 - ov, -d / 2 - ov), e(w / 2 + ov, -d / 2 - ov), R1, R0, rc, uvs);
+  roofs.quad(e(w / 2 + ov, d / 2 + ov), e(-w / 2 - ov, d / 2 + ov), R0, R1, rc, uvs);
+  if (hip) {
+    roofs.tri(e(-w / 2 - ov, d / 2 + ov), e(-w / 2 - ov, -d / 2 - ov), R0, rc, [[0, 0], [d / 3, 0], [d / 6, S / 1.2]]);
+    roofs.tri(e(w / 2 + ov, -d / 2 - ov), e(w / 2 + ov, d / 2 + ov), R1, rc, [[0, 0], [d / 3, 0], [d / 6, S / 1.2]]);
+  } else {
+    for (const sx of [-1, 1]) {
+      const x = (sx * w) / 2;
+      walls.tri(f.p(x, -d / 2, y1), f.p(x, d / 2, y1), f.p(x, 0, y1 + rh), wc,
+        [[0, vt], [d / U, vt], [d / U / 2, vt + rh / V]], f.dir(sx, 0));
+    }
+  }
+  if (chimney) {
+    const p = f.p((w / 2 - 1.1) * (chimney > 0.5 ? 1 : -1), 0, y1 + rh - 0.7);
+    props.box(0.8, 1.9, 1.2, p[0], p[1], p[2], -a, col('#8a4535'));
+  }
+}
+
+// Any footprint: straight walls with a flat roof.
+function flat(walls, roofs, pts, base, top, wallCol, roofCol, edges) {
+  let area2 = 0;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) area2 += pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1];
+  const sgn = area2 > 0 ? 1 : -1;
+  const wc = col(wallCol);
+  for (let i = 0; i < pts.length; i++) {
+    const A = pts[i], B = pts[(i + 1) % pts.length];
+    const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz) || 1;
+    // outward normal for this winding
+    const n = [(dz / L) * sgn, 0, (-dx / L) * sgn];
+    wall(walls, A, B, base, base - 2, top, n, wc, edges);
+  }
+  const tris = THREE.ShapeUtils.triangulateShape(pts.map(([x, z]) => new THREE.Vector2(x, z)), []);
+  const rc = col(roofCol);
+  for (const [a, b, c] of tris) {
+    roofs.tri([pts[a][0], top, pts[a][1]], [pts[b][0], top, pts[b][1]], [pts[c][0], top, pts[c][1]], rc, [[0, 0], [0, 0], [0, 0]], [0, 1, 0]);
+  }
+}
+
+// Smallest rotated rectangle around a footprint (1° search) → [cx, cz, long, short, angle]
+function minRect(pts) {
+  let best = null;
+  for (let deg = 0; deg < 90; deg++) {
+    const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const [x, z] of pts) {
+      const u = x * c + z * s, v = -x * s + z * c;
+      u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+    }
+    const area = (u1 - u0) * (v1 - v0);
+    if (!best || area < best.area) {
+      const uc = (u0 + u1) / 2, vc = (v0 + v1) / 2;
+      const long = u1 - u0 >= v1 - v0;
+      best = { area, rect: [uc * c - vc * s, uc * s + vc * c, Math.max(u1 - u0, v1 - v0), Math.min(u1 - u0, v1 - v0), long ? a : a + Math.PI / 2] };
+    }
+  }
+  return best.rect;
+}
+
+// ---------- Town ----------
+export function buildTown() {
+  const occ = new Occupancy(Math.max(HALF_W, HALF_H), 2);
+  // 1 = street, 4 = building
+  for (const s of DATA.segments) {
+    if (s.t !== 'road' || s.tunnel) continue;
+    const w = ROAD_WIDTH[s.c] || 3;
+    occ.markPolyline(s.p, w / 2 + (MAJOR.has(s.c) ? 2.2 : 0.4), 1);
+  }
+  for (const s of DATA.segments) if (s.t === 'rail') occ.markPolyline(s.p, 3, 1);
+  for (const w of DATA.water.lines) occ.markPolyline(w.p, w.c === 'river' ? 5 : 2, 2);
 
   const tex = { shop: facadeTextures(true), house: facadeTextures(false) };
   const B = { shop: new Batch(), house: new Batch() };
-  const roofs = new Batch(), props = new Batch();
-  const fronts = new Map(); // road name → [{A, B, normal, base, floors}]
+  const roofs = new Batch(), flatRoofs = new Batch(), props = new Batch();
+  const edges = [];
+  const r = rng(424242);
 
-  const SHOP_STREETS = new Set(['High Street', 'Sun Street', 'Bucklersbury', 'Hermitage Road', 'Bridge Street', 'Churchyard', 'Brand Street', 'Market Place', 'Bancroft']);
+  for (const b of DATA.buildings) {
+    const pts = b.p;
+    if (pts.length < 3) continue;
+    let cx = 0, cz = 0;
+    for (const [x, z] of pts) { cx += x; cz += z; }
+    cx /= pts.length; cz /= pts.length;
+    let area = 0;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) area += (pts[j][0] + pts[i][0]) * (pts[j][1] - pts[i][1]);
+    area = Math.abs(area / 2);
+    occ.markPoly(pts, 4, (x, z) => inside(x, z, pts));
 
-  function placeAlong(pts, name, opts) {
-    const path = new Path(pts);
-    const list = fronts.get(name) || [];
-    fronts.set(name, list);
-    for (const side of [1, -1]) {
-      let t = opts.start ?? 2;
-      while (t < path.length - 2) {
-        const w = opts.w[0] + r() * (opts.w[1] - opts.w[0]);
-        const d = opts.d[0] + r() * (opts.d[1] - opts.d[0]);
-        const p = path.at(t + w / 2);
-        const off = opts.setback + d / 2;
-        const cx = p.x + p.nx * side * off, cz = p.z + p.nz * side * off;
-        const a = Math.atan2(p.dz, p.dx);
-        if (occ.rectFree(cx, cz, w, d, a)) {
-          occ.markRect(cx, cz, w, d, a, 4, 0.4);
-          const floors = opts.floors[Math.floor(r() * opts.floors.length)];
-          const h = floors * FLOOR + 0.4;
-          const roofRoll = r();
-          const roof = opts.flatChance && roofRoll < opts.flatChance ? 'flat' : roofRoll < 0.62 ? 'gable' : roofRoll < 0.82 ? 'gableX' : 'hip';
-          const kind = opts.shop ? 'shop' : 'house';
-          const bld = addBuilding(B[kind], roofs, props, {
-            cx, cz, a, w, d, h, roof: w < 7 && roof === 'hip' ? 'gable' : roof,
-            wall: pick(WALLS, r), roofColor: pick(ROOFS, r), chimney: r() < 0.6 ? r() : 0,
-          });
-          // Front wall faces the street: edge 0→1 when side=+1, edge 2→3 when side=-1
-          const [i0, i1] = side === 1 ? [0, 1] : [2, 3];
-          const A = bld.A[i0], Bc = bld.A[i1];
-          list.push({
-            A: bld.frame.p(A[0], A[1], 0), B: bld.frame.p(Bc[0], Bc[1], 0),
-            normal: bld.frame.dir(0, side === 1 ? -1 : 1), base: bld.base, floors: floors, t: t + w / 2, side, shop: opts.shop,
-          });
-          t += w + (opts.gap ? opts.gap[0] + r() * (opts.gap[1] - opts.gap[0]) : 0);
-        } else {
-          t += 2;
-        }
-      }
-    }
-  }
+    let base = Infinity;
+    for (const [x, z] of pts) base = Math.min(base, groundHeight(x, z));
+    base = Math.min(base, groundHeight(cx, cz));
 
-  // Market Place frontages first so the square is fully enclosed
-  const { x0, x1, z0, z1 } = PLAZA;
-  for (const edge of [[[x0, z0], [x1, z0]], [[x1, z0], [x1, z1]], [[x1, z1], [x0, z1]], [[x0, z1], [x0, z0]]]) {
-    placeAlong(edge, 'Market Place', { w: [6, 10], d: [12, 18], setback: 1.2, floors: [2, 3, 3, 4], shop: true, start: 0 });
-  }
-  for (const road of ROADS) {
-    const pave = road.pave ?? (road.res ? 2 : 2.5);
-    if (road.res) {
-      placeAlong(road.pts, '', { w: [6, 8.5], d: [8, 10], setback: road.w / 2 + pave + 4, floors: [2, 2, 2, 3], gap: [1, 4], shop: false });
+    const cls = b.c || '';
+    const small = SMALL.has(cls) || area < 22;
+    const home = HOMES.has(cls) || (!cls && area < 160);
+    const central = Math.hypot(cx, cz) < 380;
+    const kind = !home && !small && (central || ['commercial', 'retail', 'civic', 'office'].includes(cls)) ? 'shop' : 'house';
+    const brickish = home ? r() < 0.7 : r() < 0.45;
+    const wallCol = small ? pick([['#b9ada0', 1], ['#9d8f80', 1], ['#c9c0b2', 1]], r) : pick(brickish ? BRICK : RENDER, r);
+
+    if (b.n === "St Mary's") { church(props, pts, base, edges); continue; }
+
+    // Height of the walls (eaves)
+    let total = b.h, eaves;
+    if (!total && b.f) total = b.f * FLOOR + (b.rr ? 2.5 : 1);
+    if (small) eaves = Math.min(total || 2.6, 3);
+    else if (total) eaves = b.rr ? Math.max(2.8, total - Math.min(b.rr[3] * 0.42, 4)) : total;
+    else if (home) eaves = cls === 'apartments' ? 9.5 : area > 90 && r() < 0.15 ? 8 : 5.6;
+    else eaves = cls === 'civic' ? 11 : cls === 'school' ? 7 : cls === 'industrial' || cls === 'warehouse' ? 8 : central ? (r() < 0.45 ? 9.8 : 7.6) : 7;
+
+    const rect = b.rr || (!small && area < 700 && area > 25 ? minRect(pts) : null);
+    const rectOk = rect && area / (rect[2] * rect[3]) > 0.8;
+    if (rectOk && !small && rect[3] < 16 && b.r !== 'flat') {
+      pitched(B[kind], roofs, props, {
+        cx: rect[0], cz: rect[1], w: rect[2], d: rect[3], a: rect[4], eaves, base,
+        roof: b.r === 'hipped' || (b.r !== 'gabled' && r() < 0.35) ? 'hipped' : 'gabled',
+        wall: wallCol, roofColor: pick(TILE, r), chimney: home && r() < 0.7 ? r() : 0,
+      }, small ? null : edges);
     } else {
-      const shop = SHOP_STREETS.has(road.name);
-      placeAlong(road.pts, road.name, { w: [5.5, 12], d: [10, 18], setback: road.w / 2 + pave + 0.6, floors: shop ? [2, 3, 3, 4] : [2, 2, 3], shop, flatChance: 0.06, gap: shop ? [0, 0.4] : [0.5, 3] });
-    }
-  }
-  // A second, looser row behind the main streets to fill the blocks
-  for (const road of ROADS) {
-    if (road.res) continue;
-    const pave = road.pave ?? 2.5;
-    placeAlong(road.pts, '', { w: [6, 10], d: [8, 12], setback: road.w / 2 + pave + 24, floors: [2, 2, 3], gap: [2, 7], shop: false });
-  }
-
-  // ----- Landmarks -----
-  const stone = '#cfc6ae', lead = '#727880';
-  const { church, cornExchange, townHall, britishSchools, priory } = LANDMARKS;
-  const [chx, chz] = church.c;
-  addBuilding(props, props, props, { cx: chx + 2, cz: chz, a: 0, w: 44, d: 26, h: 6.5, roof: 'gable', rh: 1.8, wall: stone, roofColor: lead });
-  addBuilding(props, props, props, { cx: chx + 2, cz: chz, a: 0, w: 44, d: 12, h: 11.5, roof: 'gable', rh: 4, wall: stone, roofColor: lead });
-  addBuilding(props, props, props, { cx: chx + 32, cz: chz, a: 0, w: 16, d: 11, h: 9, roof: 'gable', rh: 4, wall: stone, roofColor: lead });
-  addBuilding(props, props, props, { cx: chx - 5, cz: chz + 15.5, a: 0, w: 6, d: 5, h: 5.5, roof: 'gableX', rh: 2.4, wall: stone, roofColor: lead });
-  const tb = groundHeight(chx - 27, chz);
-  addBuilding(props, props, props, { cx: chx - 26, cz: chz, a: 0, w: 10, d: 10, h: 25, roof: 'flat', wall: stone, roofColor: '#9aa0a4' });
-  for (let i = 0; i < 4; i++) for (let k = 0; k < 4; k++) {
-    const sx = [-1, 1, 1, -1][i], sz = [-1, -1, 1, 1][i];
-    const lx = i % 2 === 0 ? -4.6 + k * 3.07 : sx * 4.6, lz = i % 2 === 0 ? sz * 4.6 : -4.6 + k * 3.07;
-    props.box(1.1, 1.3, 1.1, chx - 26 + lx, tb + 25, chz + lz, 0, col(stone));
-  }
-  props.cylinder(1.8, 7.5, chx - 26, tb + 25, chz, col(lead), 8, 0);
-  const dark = col('#3b4146');
-  for (let x = chx - 17; x <= chx + 22; x += 6.5) {
-    for (const s of [-1, 1]) {
-      props.box(2, 3.4, 0.3, x, tb + 1.6, chz + s * 13.05, 0, dark);
-      props.box(1.6, 2.2, 0.3, x, tb + 7.8, chz + s * 6.05, 0, dark);
-    }
-  }
-  props.box(0.3, 6, 3.6, chx + 40.1, tb + 1.8, chz, 0, dark); // east window
-
-  // Corn Exchange — faces east onto Market Place
-  const ce = addBuilding(B.shop, roofs, props, { cx: cornExchange.c[0], cz: cornExchange.c[1], a: Math.PI / 2, w: 26, d: 16, h: 9.5, roof: 'gableX', rh: 4.5, wall: '#ece2c9', roofColor: '#51575f' });
-  props.box(2.2, 2.4, 2.2, cornExchange.c[0], ce.base + 13.6, cornExchange.c[1], 0, col('#ece2c9'));
-  props.cylinder(1.4, 2.4, cornExchange.c[0], ce.base + 16, cornExchange.c[1], col('#5f7f78'), 8, 0);
-  // Town Hall — faces east onto Brand Street
-  const th = addBuilding(B.house, roofs, props, { cx: townHall.c[0], cz: townHall.c[1], a: Math.PI / 2, w: 32, d: 22, h: 12, roof: 'gable', rh: 5.5, wall: '#a44d38', roofColor: '#51575f' });
-  props.box(3, 4, 3, townHall.c[0], th.base + 16, townHall.c[1], 0, col('#e6dcc6'));
-  props.cylinder(2.2, 3.5, townHall.c[0], th.base + 20, townHall.c[1], col('#5a6068'), 4, 0);
-  props.box(6, 1, 3, townHall.c[0] + 12.5, th.base, townHall.c[1], Math.PI / 2, col('#d6cdb9')); // steps
-  // British Schools — faces west onto Queen Street
-  const bs = addBuilding(B.house, roofs, props, { cx: britishSchools.c[0], cz: britishSchools.c[1], a: -Math.PI / 2, w: 32, d: 14, h: 7, roof: 'gable', rh: 4.5, wall: '#b25a43', roofColor: '#5d636b' });
-  props.box(1.4, 2.2, 1.4, britishSchools.c[0], bs.base + 11.2, britishSchools.c[1] + 8, 0, col('#efe8d8'));
-  props.cylinder(1.2, 1.6, britishSchools.c[0], bs.base + 13.4, britishSchools.c[1] + 8, col('#5d636b'), 4, 0);
-  // Hitchin Priory
-  addBuilding(B.house, roofs, props, { cx: priory.c[0], cz: priory.c[1], a: 0, w: 46, d: 20, h: 12.5, roof: 'hip', rh: 4, wall: '#efe8d8', roofColor: '#5d636b' });
-  addBuilding(B.house, roofs, props, { cx: priory.c[0] - 18, cz: priory.c[1] + 18, a: 0, w: 10, d: 18, h: 9, roof: 'hip', rh: 3, wall: '#efe8d8', roofColor: '#5d636b' });
-
-  // Market stalls
-  const awnings = ['#c8453a', '#3f7d4d', '#3c5f94', '#d99a2b'];
-  [-19, -7, 5, 17].forEach((z, i) => {
-    const x = -13, y = groundHeight(x, z) + 0.09;
-    props.box(2.6, 0.95, 4.4, x, y, z, 0, col('#8c6444'));
-    props.box(2.2, 0.35, 4.0, x, y + 0.95, z, 0, col(['#e4c057', '#d2593b', '#7bab4d', '#e98f3c'][i]));
-    for (const [px, pz] of [[-1.4, -2.3], [1.4, -2.3], [1.4, 2.3], [-1.4, 2.3]]) props.box(0.1, 2.5, 0.1, x + px, y, z + pz, 0, col('#e8e4dc'));
-    const f = frame(x, z, Math.PI / 2);
-    const ac = col(awnings[i]);
-    props.quad(f.p(-2.5, -1.7, y + 2.3), f.p(2.5, -1.7, y + 2.3), f.p(2.5, 0, y + 3.1), f.p(-2.5, 0, y + 3.1), ac);
-    props.quad(f.p(2.5, 1.7, y + 2.3), f.p(-2.5, 1.7, y + 2.3), f.p(-2.5, 0, y + 3.1), f.p(2.5, 0, y + 3.1), ac);
-  });
-
-  // Bridge parapets
-  const bridges = {};
-  for (const br of BRIDGES) {
-    if (br.skip) continue;
-    const road = ROADS.find((x) => x.name === br.road);
-    const path = roadPaths.get(br.road);
-    const t = path.closestT(br.at[0], br.at[1]);
-    const p = path.at(t);
-    const a = Math.atan2(p.dz, p.dx);
-    const half = road.w / 2 + (road.pave ?? 2.5) + 0.3;
-    bridges[br.road] = { t, p, a, half, len: 18 };
-    for (const s of [-1, 1]) {
-      props.box(18, 1.1, 0.5, p.x + p.nx * half * s, groundHeight(p.x, p.z), p.z + p.nz * half * s, -a, col('#b8ad97'));
+      flat(B[kind], flatRoofs, pts, base, base + eaves, wallCol, pick(FLAT, r), small ? null : edges);
     }
   }
 
-  // Roundabout welcome sign
-  const ry = groundHeight(ROUNDABOUT.x, ROUNDABOUT.z) + 0.15;
-  props.box(4.2, 1.4, 0.3, ROUNDABOUT.x, ry + 0.4, ROUNDABOUT.z - 2.5, 0, col('#233a2e'));
-  props.box(0.2, 0.5, 0.2, ROUNDABOUT.x - 1.8, ry, ROUNDABOUT.z - 2.5, 0, col('#233a2e'));
-  props.box(0.2, 0.5, 0.2, ROUNDABOUT.x + 1.8, ry, ROUNDABOUT.z - 2.5, 0, col('#233a2e'));
-
-  // ----- Meshes -----
   const group = new THREE.Group();
   const wallMats = {};
   for (const kind of ['shop', 'house']) {
@@ -336,12 +250,39 @@ export function buildTown() {
     m.castShadow = m.receiveShadow = true;
     group.add(m);
   }
-  const roofMesh = new THREE.Mesh(roofs.build(), new THREE.MeshStandardMaterial({ vertexColors: true, map: roofTexture(), roughness: 0.85, side: THREE.DoubleSide }));
-  roofMesh.castShadow = roofMesh.receiveShadow = true;
-  group.add(roofMesh);
-  const propMesh = new THREE.Mesh(props.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, side: THREE.DoubleSide }));
-  propMesh.castShadow = propMesh.receiveShadow = true;
-  group.add(propMesh);
+  const add = (batch, mat) => { const m = new THREE.Mesh(batch.build(), mat); m.castShadow = m.receiveShadow = true; group.add(m); };
+  add(roofs, new THREE.MeshStandardMaterial({ vertexColors: true, map: roofTexture(), roughness: 0.85, side: THREE.DoubleSide }));
+  add(flatRoofs, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }));
+  add(props, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, side: THREE.DoubleSide }));
 
-  return { group, occ, fronts, roadPaths, bridges, wallMats };
+  return { group, occ, edges, wallMats };
+}
+
+function inside(x, z, pts) {
+  let c = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, zi] = pts[i], [xj, zj] = pts[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c;
+  }
+  return c;
+}
+
+// St Mary's: flint walls, lead roof, and the west tower with its Hertfordshire spike.
+function church(props, pts, base, edges) {
+  const walls = props, roofs = props;
+  const stone = '#cbc2aa', lead = '#737a82';
+  flat(walls, props, pts, base, base + 7.5, stone, lead, edges);
+  const [cx, cz, L, D, a] = minRect(pts);
+  pitched(walls, roofs, props, { cx, cz, w: L * 0.84, d: D * 0.45, a, eaves: 11, base, roof: 'gabled', wall: stone, roofColor: lead, rh: 3.6 });
+  // Tower at the west end of the long axis
+  const dir = [Math.cos(a), Math.sin(a)];
+  const west = dir[0] < 0 ? 1 : -1;
+  const tx = cx + dir[0] * west * (L / 2 - 4.5), tz = cz + dir[1] * west * (L / 2 - 4.5);
+  pitched(walls, roofs, props, { cx: tx, cz: tz, w: 9, d: 9, a, eaves: 24, base, roof: 'hipped', wall: stone, roofColor: lead, rh: 0.4 });
+  const f = frame(tx, tz, a);
+  for (let k = -4; k <= 4; k += 2) for (const [lx, lz] of [[k, -4.3], [k, 4.3], [-4.3, k], [4.3, k]]) {
+    const p = f.p(lx, lz, base + 24);
+    props.box(1, 1.2, 1, p[0], p[1], p[2], -a, col(stone));
+  }
+  props.cylinder(1.6, 7, tx, base + 24.3, tz, col(lead), 8, 0);
 }

@@ -30,7 +30,7 @@ const state = {
   suggesting: false,
   view: 'site',
   plan: store.get('hib-plan-v2', {}),
-  model: store.get('hib-model-v1', 'volunteer'),
+  model: 'volunteer', // volunteer-led programme; only specialist work is paid
   sourcing: store.get('hib-sourcing-v1', 'mixed'),
   ideas: store.get('hib-ideas-v1', []),
   pendingIdea: null,
@@ -291,12 +291,6 @@ function setSourcing(v) {
   renderList();
   if (state.view === 'plan') renderPlan(); else if (state.view === 'judging') renderJudging(); else renderDetail();
 }
-function setModel(m) {
-  state.model = m;
-  store.set('hib-model-v1', m);
-  renderList();
-  if (state.view === 'plan') renderPlan(); else if (state.view === 'judging') renderJudging(); else renderDetail();
-}
 
 // How strongly a site's chosen option speaks to each judging pillar (0–2)
 function pillarLevels(id) {
@@ -333,7 +327,7 @@ function renderList() {
 }
 function renderPlanBar() {
   const t = planTotals();
-  $('#plan-bar').innerHTML = `<div><span class="pb-label">Your plan · ${t.count} sites · ${state.model === 'volunteer' ? 'volunteer-led' : 'contractor'} · ${state.sourcing === 'retail' ? 'shop-bought' : 'wholesale'}</span>
+  $('#plan-bar').innerHTML = `<div><span class="pb-label">Your plan · ${t.count} sites · volunteer-led</span>
     <span class="pb-figs"><b>${shortRange(t.setup)}</b> set-up · <b>${shortRange(t.annual)}</b> a year${state.model === 'volunteer' ? `<br /><b>${hrs(t.yearHours)}</b> volunteer hours a year` : ''}</span></div>
     <button class="primary small" id="open-plan">Plan &amp; costs</button>`;
 }
@@ -380,9 +374,6 @@ function setOption(id, optId) {
 }
 
 const modelSwitch = () => `<div class="switches">
-  <div class="seg" role="group" aria-label="Who does the work">
-    <button data-model="volunteer" aria-pressed="${state.model === 'volunteer'}">Volunteer-led</button>
-    <button data-model="contractor" aria-pressed="${state.model === 'contractor'}">Contractor</button></div>
   <div class="seg" role="group" aria-label="How plants are bought">
     ${Object.entries(SOURCING).map(([k, v]) => `<button data-sourcing="${k}" aria-pressed="${state.sourcing === k}">${v.name}</button>`).join('')}</div>
   </div>`;
@@ -420,7 +411,7 @@ function renderDetail() {
         return `<button class="option" data-opt="${o.id}" aria-pressed="${o.id === opt.id}">
           <span class="opt-head"><span class="opt-letter">${site.options.length > 1 ? `Option ${'ABC'[k]}` : 'Proposal'}</span>${k === 0 && site.options.length > 1 ? '<span class="rec">Recommended</span>' : ''}</span>
           <span class="opt-name"><span class="dots" aria-hidden="true">${SCHEMES[o.scheme].plants.slice(0, 3).map((p) => `<i style="background:${p.color}"></i>`).join('')}</span>${o.name}</span>
-          <span class="opt-cost"><b>${range(oc.capitalTotal)}</b> set-up · <b>${range(oc.annualTotal)}</b> a year${vol && oc.setupHours + oc.yearHours > 0 ? `<br />plus <b>${hrs(oc.setupHours)}</b> volunteer hours to plant, <b>${hrs(oc.yearHours)}</b> a year to look after` : ''}</span>
+          <span class="opt-cost"><b>${range(oc.capitalTotal)}</b> set-up · <b>${range(oc.annualTotal)}</b> a year${vol && oc.setupHours + oc.yearHours > 0 ? `<br />plus ${[oc.setupHours >= 1 ? `<b>${hrs(oc.setupHours)}</b> volunteer hours to plant` : '', oc.yearHours >= 1 ? `<b>${hrs(oc.yearHours)}</b> hours a year to look after` : ''].filter(Boolean).join(', ')}` : ''}</span>
           <span class="opt-tags">${levelTag('Upkeep', o.maintenance, false)}${levelTag('Impact', o.impact, true)}${levelTag('Wildlife', o.wildlife, true)}</span>
         </button>`;
       }).join('')}
@@ -433,7 +424,7 @@ function renderDetail() {
         <tr class="grp"><th colspan="2">Each year</th></tr>${c.annual.length ? costRows(c.annual) : '<tr><td>No running costs: bulbs come back every year</td><td class="h">£0</td></tr>'}
         <tr class="tot"><td>Yearly total${vol && c.yearHours ? `<em>plus about ${hrs(c.yearHours)} volunteer hours</em>` : ''}</td><td class="h">${range(c.annualTotal)}</td></tr></tbody>
       </table>
-      <p class="fine">Plants: ${SOURCING[state.sourcing].name.toLowerCase()}${state.sourcing === 'mixed' ? ' (80% trade plugs, bulbs and seed, 20% from local shops)' : ''}. ${vol ? 'Volunteer-led: volunteers do the planting, watering and weeding, so only materials are costed. Traffic management, work at height and structural fixings stay with contractors.' : 'Contractor: all labour is paid.'} Indicative UK prices. Get quotes before bidding.</p>
+      <p class="fine">Plants: ${SOURCING[state.sourcing].name.toLowerCase()}${state.sourcing === 'mixed' ? ' (80% trade plugs, bulbs and seed, 20% from local shops)' : ''}. Volunteers do the planting, watering and weeding, so only materials are costed. Traffic management, work at height, structural fixings and machinery are paid. Budget prices: get quotes before bidding.</p>
     </details>
     <h3 class="section-label">What the judges will see</h3>
     <div class="pillars">${Object.entries(pl).map(([k, v]) => `<span class="pill-${k}"><i style="--v:${v}"></i>${PILLAR_SHORT[k]}: ${LEVEL[v]}</span>`).join('')}</div>
@@ -462,8 +453,6 @@ function renderDetail() {
   app.classList.add('has-detail');
 }
 $('#detail-body').addEventListener('click', (e) => {
-  const mb = e.target.closest('[data-model]');
-  if (mb) return setModel(mb.dataset.model);
   const sb = e.target.closest('[data-sourcing]');
   if (sb) return setSourcing(sb.dataset.sourcing);
   const ob = e.target.closest('[data-opt]');
@@ -504,7 +493,7 @@ function renderPlan() {
     ${modelSwitch()}
     <div class="tiles">
       <div class="tile"><span>Set-up</span><b>${shortRange(t.setup)}</b><em>incl. 10% contingency</em></div>
-      <div class="tile"><span>Each year</span><b>${shortRange(t.annual)}</b><em>${vol ? 'materials, paid work, running the group' : 'planting, watering, upkeep'}</em></div>
+      <div class="tile"><span>Each year</span><b>${shortRange(t.annual)}</b><em>materials, specialist work, running the group</em></div>
       ${vol ? `<div class="tile"><span>Volunteers</span><b>${hrs(t.yearHours)} hrs</b><em>a year · about ${t.volunteers} people at 2 hrs/week</em></div>` : `<div class="tile"><span>Sites</span><b>${t.count}</b><em>of ${SITES.length} proposed</em></div>`}
     </div>
     ${vol ? `<p class="fine">Volunteer time is worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year at £${VOLUNTEER_RATE}/hour. Many funders accept that as in-kind match funding. Planting the sites takes about ${hrs(t.setupHours)} hours on top.</p>` : ''}
@@ -567,7 +556,7 @@ function planText() {
   const lines = [
     'HITCHIN IN BLOOM: PROPOSED PLANTING PLAN',
     '',
-    `${t.count} sites, ${vol ? 'delivered by volunteers with contractors for specialist work' : 'delivered by contractors'}. Plants bought: ${SOURCING[state.sourcing].name.toLowerCase()}.`,
+    `${t.count} sites, delivered by volunteers, with paid specialists only where needed (traffic management, work at height, structural fixings, machinery). Plants bought: ${SOURCING[state.sourcing].name.toLowerCase()}.`,
     `Set-up ${range(t.setup)} (including 10% contingency). Running costs ${range(t.annual)} a year.`,
     vol ? `Volunteer time: about ${hrs(t.setupHours)} hours to plant, then ${hrs(t.yearHours)} hours a year (about ${t.volunteers} regular volunteers), worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year as in-kind match funding.` : '',
     'Figures are indicative ranges for budgeting, based on typical UK prices and quantities measured from a 3D model of the town. Quotes to follow.',

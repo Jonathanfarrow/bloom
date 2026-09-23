@@ -24,7 +24,7 @@ to the council, businesses, sponsors and residents.
     from the model
   - why the site was chosen, who owns the land, what needs checking before going
     ahead, and possible partners
-- **Volunteer-led or contractor costing.** In volunteer-led mode, volunteers
+- **Volunteer-led costing.** Volunteers
   do the planting, watering and weeding, so only materials are costed. Work
   that has to be paid (traffic management, work at height on lamp columns,
   structural fixings, machinery) stays paid. The plan shows the volunteer hours

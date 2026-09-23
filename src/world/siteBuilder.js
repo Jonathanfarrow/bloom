@@ -1,13 +1,104 @@
 import * as THREE from 'three';
 import { Batch, col } from './batch.js';
-import { groundHeight, streetPath, riverPath, landByName, ROAD_WIDTH } from './geo.js';
+import { DATA, groundHeight, streetPath, riverPath, landByName, ROAD_WIDTH } from './geo.js';
 import { Path, pointInPoly, polyBounds, rng } from './util.js';
 import { SILL } from './buildings.js';
+import { SCHEMES } from '../data/sites.js';
 
-const SOIL = col('#4e3627');
+const SOIL = col('#43301f');
+const EDGE = col('#b9ae98');
 const MATERIALS = { stone: col('#cdc2ab'), timber: col('#8a5a3b'), green: col('#2f5a43'), trough: col('#3d584a') };
 
-// Turns each site's shape list into (a) structures — soil, planters, posts —
+// ---------------------------------------------------------------------------
+// Planting design. Instead of mixing every plant at random, each bed is laid
+// out the way a garden designer would plant it:
+//   beds       – a low edging row, then bold drifts of one plant each, graded
+//                so the tallest plants sit at the back or centre
+//   containers – "thriller, filler, spiller": a tall plant in the middle,
+//                colour blocks around it, trailing plants over the rim
+//   meadows    – natural-looking drifts of each species rather than confetti
+// Every slot gets `band` = the index of its plant in the option's scheme.
+// ---------------------------------------------------------------------------
+function roles(schemeKey) {
+  const ps = SCHEMES[schemeKey].plants.map((p, i) => ({ ...p, i }));
+  const flowering = ps.filter((p) => p.form !== 'foliage');
+  const low = [...(flowering.length ? flowering : ps)].sort((a, b) => a.h - b.h);
+  const edge = low[0];
+  const spill = ps.find((p) => p.form === 'tiny') || edge;
+  const thriller = [...ps].sort((a, b) => b.h - a.h)[0];
+  let body = ps.filter((p) => p !== edge).sort((a, b) => a.h - b.h);
+  if (!body.length) body = ps;
+  let fillers = ps.filter((p) => p !== spill && p !== thriller);
+  if (!fillers.length) fillers = ps;
+  return { ps, edge, spill, thriller, body, fillers };
+}
+
+function pickByShare(list, x) {
+  const total = list.reduce((s, p) => s + p.share, 0);
+  let acc = 0;
+  for (const p of list) { acc += p.share / total; if (x <= acc) return p; }
+  return list[list.length - 1];
+}
+
+// list: slots in one bed. edgeOf(s): metres to the edge that gets the edging row.
+// depthOf(s): 0 (front/edge) … 1 (back/centre) for height grading.
+function designBed(list, R, rnd, { edgeOf, depthOf, drift = 1.6, edging = true, edgeBand = 0.42, natural = false }) {
+  if (!list.length) return;
+  const n = Math.max(2, Math.round((list.length * 0.12) / (drift * drift)));
+  const seeds = [];
+  for (let k = 0; k < n; k++) {
+    const s = list[Math.floor(rnd() * list.length)];
+    let plant;
+    if (natural) plant = pickByShare(R.ps, rnd());
+    else {
+      const d = depthOf(s);
+      const idx = Math.max(0, Math.min(R.body.length - 1, Math.floor(d * R.body.length + (rnd() - 0.5) * 1.5)));
+      plant = R.body[idx];
+    }
+    seeds.push({ x: s.x, z: s.z, plant });
+  }
+  for (const s of list) {
+    if (edging && edgeOf(s) < edgeBand) { s.band = R.edge.i; continue; }
+    let best = seeds[0], bd = Infinity;
+    for (const sd of seeds) {
+      const d = (sd.x - s.x) ** 2 + (sd.z - s.z) ** 2;
+      if (d < bd) { bd = d; best = sd; }
+    }
+    s.band = best.plant.i;
+  }
+}
+
+// t: 0 at the centre of a container … 1 at the rim; a: angle around it
+function containerBand(R, t, a, sectors = 6) {
+  if (t > 0.74) return R.spill.i;
+  if (t < 0.3) return R.thriller.i;
+  const k = Math.floor(((a / (Math.PI * 2)) + 1) * sectors) % sectors;
+  return R.fillers[k % R.fillers.length].i;
+}
+
+// Evenly spaced planting positions (triangular grid) inside a bounding box
+function triGrid(b, sp, rnd, fn) {
+  const dz = sp * 0.866;
+  let row = 0;
+  for (let z = b.z0 + dz / 2; z < b.z1; z += dz, row++) {
+    for (let x = b.x0 + (row % 2 ? sp / 2 : sp / 4); x < b.x1; x += sp) {
+      fn(x + (rnd() - 0.5) * sp * 0.12, z + (rnd() - 0.5) * sp * 0.12);
+    }
+  }
+}
+
+function distToPoly(x, z, pts) {
+  let best = Infinity;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [x0, z0] = pts[j], [x1, z1] = pts[i];
+    const vx = x1 - x0, vz = z1 - z0, l2 = vx * vx + vz * vz || 1;
+    const f = Math.max(0, Math.min(1, ((x - x0) * vx + (z - z0) * vz) / l2));
+    best = Math.min(best, Math.hypot(x - x0 - vx * f, z - z0 - vz * f));
+  }
+  return best;
+}
+
+// Turns each site's options into (a) structures — soil, planters, posts —
 // and (b) flower "slots" that the FlowerField fills with plants.
 export function buildSites(sites, town) {
   const fixtures = new Batch();   // lamp columns etc. that stay whichever option is chosen
@@ -18,24 +109,15 @@ export function buildSites(sites, town) {
   sites.forEach((site, si) => site.options.forEach((option, oi) => jobs.push({ site, option, seed: 1000 + si * 77 + oi * 13 })));
 
   jobs.forEach(({ site, option, seed }) => {
-    const si = seed;
     const batch = new Batch();
     const r = rng(seed);
+    const R = roles(option.scheme);
     const slots = [];
     let area = 0, units = 0;
-    const slot = (x, z, y, extra = {}) => slots.push({ x, z, y, r: r(), r2: r(), r3: r(), delay: 0.04 + r() * 0.56, band: -1, ...extra });
-    // Ground-level planting: skip anything that lands inside a building (or on a path, for meadows)
-    const groundSlot = (x, z, y, cell, extra, avoidPaths) => {
-      const v = occ.get(x, z);
-      if (v === 4 || (avoidPaths && v === 1)) return;
-      slot(x, z, y, extra);
-      area += cell;
-    };
-    const grid = (b, sp, fn) => {
-      for (let z = b.z0 + sp / 2; z < b.z1; z += sp) for (let x = b.x0 + sp / 2; x < b.x1; x += sp) {
-        fn(x + (r() - 0.5) * sp * 0.8, z + (r() - 0.5) * sp * 0.8);
-      }
-    };
+    const mk = (x, z, y, extra = {}) => ({ x, z, y, r: r(), r2: r(), r3: r(), delay: 0.04 + r() * 0.56, band: -1, ...extra });
+    const slot = (x, z, y, extra) => { const s = mk(x, z, y, extra); slots.push(s); return s; };
+    // Ground-level planting: skip anything inside a building (or on a path, for plants in grass)
+    const groundOk = (x, z, avoidPaths) => { const v = occ.get(x, z); return !(v === 4 || (avoidPaths && v === 1)); };
     const within = (x, z, name) => { const l = name && landByName(name); return !l || pointInPoly(x, z, l.p); };
 
     for (const sh of option.shapes) {
@@ -44,34 +126,44 @@ export function buildSites(sites, town) {
           const h = sh.raised ?? 0.22;
           const y0 = Math.min(...sh.pts.map(([x, z]) => groundHeight(x, z)));
           extrude(batch, sh.pts, y0 - 0.1, h + 0.1, SOIL);
-          if (sh.raised) extrudeRing(batch, sh.pts, y0 - 0.1, h + 0.16, MATERIALS.stone);
-          grid(polyBounds(sh.pts), 0.34, (x, z) => { if (pointInPoly(x, z, sh.pts)) { slot(x, z, y0 + h); area += 0.1156; } });
+          extrudeRing(batch, sh.pts, y0 - 0.1, h + (sh.raised ? 0.16 : 0.06), sh.raised ? MATERIALS.stone : EDGE, sh.raised ? 0.25 : 0.12);
+          const bed = [];
+          triGrid(polyBounds(sh.pts), 0.36, r, (x, z) => { if (pointInPoly(x, z, sh.pts)) bed.push(slot(x, z, y0 + h)); });
+          const maxD = Math.max(0.5, ...bed.map((s) => distToPoly(s.x, s.z, sh.pts)));
+          const front = sh.front; // optional [x,z] point on the viewing side: tallest plants go away from it
+          designBed(bed, R, r, {
+            edgeOf: (s) => distToPoly(s.x, s.z, sh.pts),
+            depthOf: front ? (s) => Math.min(1, Math.hypot(s.x - front[0], s.z - front[1]) / (sh.depth || 6)) : (s) => distToPoly(s.x, s.z, sh.pts) / maxD,
+          });
+          area += bed.length * 0.112;
           break;
         }
         case 'circle': {
           const [cx, cz] = sh.c, y0 = groundHeight(cx, cz), h = 0.22;
-          batch.cylinder(sh.r + 0.25, h, cx, y0 - 0.02, cz, MATERIALS.stone, 32);
-          batch.cylinder(sh.r, h + 0.04, cx, y0 - 0.02, cz, SOIL, 32);
+          batch.cylinder(sh.r + 0.2, h, cx, y0 - 0.02, cz, EDGE, 40);
+          batch.cylinder(sh.r, h + 0.04, cx, y0 - 0.02, cz, SOIL, 40);
+          const bed = [];
+          triGrid({ x0: cx - sh.r, x1: cx + sh.r, z0: cz - sh.r, z1: cz + sh.r }, 0.36, r, (x, z) => { if (Math.hypot(x - cx, z - cz) < sh.r - 0.1) bed.push(slot(x, z, y0 + h)); });
+          designBed(bed, R, r, { edgeOf: (s) => sh.r - Math.hypot(s.x - cx, s.z - cz), depthOf: (s) => 1 - Math.hypot(s.x - cx, s.z - cz) / sh.r });
           area += Math.PI * sh.r * sh.r;
-          grid({ x0: cx - sh.r, x1: cx + sh.r, z0: cz - sh.r, z1: cz + sh.r }, 0.34, (x, z) => {
-            if (Math.hypot(x - cx, z - cz) < sh.r - 0.1) slot(x, z, y0 + h);
-          });
           break;
         }
         case 'ring': {
           const [cx, cz] = sh.c, y0 = groundHeight(cx, cz) + 0.1, h = 0.25;
           const s = new THREE.Shape().absarc(0, 0, sh.r1, 0, Math.PI * 2, false);
           s.holes.push(new THREE.Path().absarc(0, 0, sh.r0, 0, Math.PI * 2, true));
-          const g = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false, curveSegments: 48 });
+          const g = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false, curveSegments: 64 });
           g.rotateX(-Math.PI / 2); g.translate(cx, y0, cz);
           batch.add(g, new THREE.Matrix4(), SOIL);
-          batch.cylinder(sh.r0, 0.3, cx, y0, cz, col('#7fae55'), 32);
-          area += Math.PI * (sh.r1 ** 2 - sh.r0 ** 2);
-          const bw = (sh.r1 - sh.r0) / 3;
-          grid({ x0: cx - sh.r1, x1: cx + sh.r1, z0: cz - sh.r1, z1: cz + sh.r1 }, 0.36, (x, z) => {
+          batch.cylinder(sh.r0, 0.3, cx, y0, cz, col('#7fae55'), 48);
+          const bed = [];
+          const mid = (sh.r0 + sh.r1) / 2, half = (sh.r1 - sh.r0) / 2;
+          triGrid({ x0: cx - sh.r1, x1: cx + sh.r1, z0: cz - sh.r1, z1: cz + sh.r1 }, 0.38, r, (x, z) => {
             const d = Math.hypot(x - cx, z - cz);
-            if (d > sh.r0 + 0.1 && d < sh.r1 - 0.1) slot(x, z, y0 + h, { band: Math.min(2, Math.floor((d - sh.r0) / bw)) });
+            if (d > sh.r0 + 0.1 && d < sh.r1 - 0.1) bed.push(slot(x, z, y0 + h));
           });
+          designBed(bed, R, r, { edgeOf: (q) => half - Math.abs(Math.hypot(q.x - cx, q.z - cz) - mid), depthOf: (q) => 1 - Math.abs(Math.hypot(q.x - cx, q.z - cz) - mid) / half, drift: 2.2 });
+          area += Math.PI * (sh.r1 ** 2 - sh.r0 ** 2);
           break;
         }
         case 'carpet': {
@@ -79,66 +171,101 @@ export function buildSites(sites, town) {
           batch.cylinder(sh.r + 0.6, 0.2, cx, y0 - 0.02, cz, MATERIALS.stone, 48);
           batch.cylinder(sh.r, h, cx, y0 - 0.02, cz, SOIL, 48);
           area += Math.PI * sh.r * sh.r;
-          const bw = sh.r / sh.bands;
-          grid({ x0: cx - sh.r, x1: cx + sh.r, z0: cz - sh.r, z1: cz + sh.r }, 0.32, (x, z) => {
+          const bw = sh.r / sh.bands, order = [...R.ps].sort((a, b) => b.h - a.h);
+          triGrid({ x0: cx - sh.r, x1: cx + sh.r, z0: cz - sh.r, z1: cz + sh.r }, 0.3, r, (x, z) => {
             const d = Math.hypot(x - cx, z - cz);
             if (d > sh.r - 0.1) return;
             const th = Math.atan2(z - cz, x - cx);
-            let band = Math.floor(d / bw);
-            if (d > sh.r * 0.3 && d < sh.r * 0.8 && Math.cos(th * 6 + d * 0.25) > 0.55) band += 3;
-            slot(x, z, y0 + h - 0.02, { band, s: 0.95 });
+            let k = Math.min(sh.bands - 1, Math.floor(d / bw));
+            // six-pointed star laid across the middle rings
+            if (d > sh.r * 0.3 && d < sh.r * 0.8 && Math.cos(th * 6) > 0.6 - (d / sh.r) * 0.4) k = sh.bands; // accent
+            const plant = k === sh.bands ? R.spill : d > sh.r - 0.6 ? R.edge : order[k % order.length];
+            slot(x, z, y0 + h - 0.02, { band: plant.i, s: 0.9 });
           });
           break;
         }
+        case 'border': {
+          // Double border either side of a path: edging at the path, tallest at the back
+          const curve = new THREE.CatmullRomCurve3(sh.pts.map(([x, z]) => new THREE.Vector3(x, 0, z)));
+          const path = new Path(curve.getSpacedPoints(Math.max(8, Math.round(new Path(sh.pts).length / 2))).map((v) => [v.x, v.z]));
+          for (const side of sh.sides === 'one' ? [1] : [1, -1]) {
+            const bed = [];
+            for (let t = 0.6; t < path.length - 0.6; t += 0.36) {
+              const p = path.at(t);
+              for (let o = sh.o0 + 0.18; o < sh.o1; o += 0.36 * 0.866) {
+                const oo = o + (Math.floor((t / 0.36)) % 2 ? 0.09 : -0.09);
+                const x = p.x + p.nx * oo * side, z = p.z + p.nz * oo * side;
+                if (!groundOk(x, z, false)) continue;
+                bed.push(slot(x, z, groundHeight(x, z) + 0.14, { depth: (oo - sh.o0) / (sh.o1 - sh.o0), edge: Math.min(oo - sh.o0, t, path.length - t) }));
+              }
+            }
+            designBed(bed, R, r, { edgeOf: (s) => s.edge, depthOf: (s) => s.depth, drift: 1.4 });
+            soilStrip(batch, path, 0, path.length, side > 0 ? sh.o0 : -sh.o1, side > 0 ? sh.o1 : -sh.o0, occ, 0.14);
+            area += bed.length * 0.112;
+          }
+          break;
+        }
         case 'strip': {
+          // Native planting along a river or street, in natural drifts
           const path = sh.river ? riverPath() : streetPath(sh.road);
           if (!path) break;
           const from = sh.fromAt ? path.closestT(...sh.fromAt) : sh.from, to = sh.toAt ? path.closestT(...sh.toAt) : sh.to;
           const [t0, t1] = [Math.min(from, to), Math.max(from, to)];
-          const sides = sh.sides === 'both' ? [1, -1] : [sh.sides === 'right' ? -1 : 1];
-          const sp = sh.meadow ? 0.62 : 0.36;
-          for (const s of sides) {
+          const sp = 0.5, bed = [];
+          for (const s of sh.sides === 'both' ? [1, -1] : [1]) {
             for (let t = t0; t <= t1; t += sp) {
               const p = path.at(t);
-              for (let o = sh.o0 + sp / 2; o < sh.o1; o += sp) {
-                if (sh.meadow && r() < 0.3) continue;
-                const oo = o + (r() - 0.5) * sp * 0.7, tt = (r() - 0.5) * sp * 0.7;
+              for (let o = sh.o0 + sp / 2; o < sh.o1; o += sp * 0.866) {
+                const oo = o + (r() - 0.5) * 0.1, tt = (r() - 0.5) * 0.1;
                 const x = p.x + p.nx * oo * s + p.dx * tt, z = p.z + p.nz * oo * s + p.dz * tt;
-                groundSlot(x, z, groundHeight(x, z) + (sh.meadow ? 0.02 : 0.16), sp * sp, sh.meadow ? { hm: 1.25 } : {}, sh.meadow);
+                if (!groundOk(x, z, true)) continue;
+                bed.push(slot(x, z, groundHeight(x, z) + 0.02, { hm: 1.2 }));
               }
             }
-            if (!sh.meadow) soilStrip(batch, path, t0, t1, s > 0 ? sh.o0 : -sh.o1, s > 0 ? sh.o1 : -sh.o0, occ);
           }
+          designBed(bed, R, r, { natural: true, edging: false, drift: 2.4, edgeOf: () => 9, depthOf: () => 0 });
+          area += bed.length * sp * sp * 0.866;
           break;
         }
         case 'planter': {
           const y0 = groundHeight(sh.x, sh.z) + 0.05, m = MATERIALS[sh.material || 'stone'];
           if (sh.counts !== false) units++;
           batch.cylinder(sh.r, sh.h, sh.x, y0, sh.z, m, 32, sh.r * 1.08);
+          batch.cylinder(sh.r * 1.08 + 0.02, 0.08, sh.x, y0 + sh.h - 0.06, sh.z, m, 32);
           batch.cylinder(sh.r * 1.02, sh.h + 0.02, sh.x, y0, sh.z, SOIL, 32);
           area += Math.PI * sh.r * sh.r;
           const top = y0 + sh.h;
+          const place = (rad, yTop, sp, extra = {}) => triGrid({ x0: sh.x - rad, x1: sh.x + rad, z0: sh.z - rad, z1: sh.z + rad }, sp, r, (x, z) => {
+            const d = Math.hypot(x - sh.x, z - sh.z);
+            if (d >= rad - 0.1) return;
+            const t = d / rad, a = Math.atan2(z - sh.z, x - sh.x);
+            const band = containerBand(R, t, a, sh.tiers ? 8 : 4);
+            const spill = band === R.spill.i;
+            // trailing plants hang over the rim
+            slot(spill ? sh.x + (x - sh.x) * 1.08 : x, spill ? sh.z + (z - sh.z) * 1.08 : z, yTop - (spill ? 0.08 : 0), { band, hm: spill ? 0.7 : 1, ...extra });
+          });
           if (sh.tiers) {
             const r2 = sh.r * 0.55, h2 = sh.h * 0.9;
             batch.cylinder(r2, h2, sh.x, top, sh.z, m, 28, r2 * 1.08);
             batch.cylinder(r2 * 1.02, h2 + 0.02, sh.x, top, sh.z, SOIL, 28);
-            grid({ x0: sh.x - r2, x1: sh.x + r2, z0: sh.z - r2, z1: sh.z + r2 }, 0.3, (x, z) => {
-              if (Math.hypot(x - sh.x, z - sh.z) < r2 - 0.1) slot(x, z, top + h2, { hm: 1.3 });
+            place(r2, top + h2, 0.28, { hm: 1.25 });
+            // lower tier: a ring of colour around the upper tier
+            triGrid({ x0: sh.x - sh.r, x1: sh.x + sh.r, z0: sh.z - sh.r, z1: sh.z + sh.r }, 0.28, r, (x, z) => {
+              const d = Math.hypot(x - sh.x, z - sh.z);
+              if (d < r2 * 1.12 || d > sh.r - 0.1) return;
+              const a = Math.atan2(z - sh.z, x - sh.x);
+              const rim = d > sh.r - 0.45;
+              slot(rim ? sh.x + (x - sh.x) * 1.06 : x, rim ? sh.z + (z - sh.z) * 1.06 : z, top - (rim ? 0.08 : 0), { band: rim ? R.spill.i : R.fillers[Math.floor(((a / (Math.PI * 2)) + 1) * 8) % 2 % R.fillers.length].i });
             });
-          }
-          grid({ x0: sh.x - sh.r, x1: sh.x + sh.r, z0: sh.z - sh.r, z1: sh.z + sh.r }, 0.3, (x, z) => {
-            const d = Math.hypot(x - sh.x, z - sh.z);
-            if (d < sh.r - 0.12 && (!sh.tiers || d > sh.r * 0.55 + 0.1)) slot(x, z, top, {});
-          });
+          } else place(sh.r, top, 0.28);
           break;
         }
         case 'along': {
           const path = streetPath(sh.road);
           if (!path) break;
-          const sides = sh.sides === 'both' ? [1, -1] : [1];
           const m = MATERIALS[sh.material || 'timber'];
           const to = Math.min(sh.to, path.length - 2);
-          for (const s of sides) {
+          for (const s of sh.sides === 'both' ? [1, -1] : [1]) {
             for (let t = sh.from; t <= to; t += sh.every) {
               const p = path.at(t);
               const x = p.x + p.nx * sh.offset * s, z = p.z + p.nz * sh.offset * s;
@@ -146,11 +273,17 @@ export function buildSites(sites, town) {
               if (!footprintClear(occ, x, z, sh.w, sh.d, a)) continue;
               const y0 = groundHeight(x, z) + 0.04;
               batch.box(sh.w, sh.h, sh.d, x, y0, z, -a, m);
+              batch.box(sh.w + 0.1, 0.06, sh.d + 0.1, x, y0 + sh.h - 0.04, z, -a, m);
               batch.box(sh.w - 0.16, sh.h + 0.02, sh.d - 0.16, x, y0, z, -a, SOIL);
               units++;
               area += sh.w * sh.d;
-              for (let u = -sh.w / 2 + 0.2; u < sh.w / 2 - 0.1; u += 0.3) for (let v = -sh.d / 2 + 0.2; v < sh.d / 2 - 0.1; v += 0.3) {
-                slot(x + p.dx * u + p.nx * v, z + p.dz * u + p.nz * v, y0 + sh.h, {});
+              // thriller down the middle, fillers in blocks, spillers along the long edges
+              for (let u = -sh.w / 2 + 0.16; u < sh.w / 2 - 0.1; u += 0.26) for (let v = -sh.d / 2 + 0.14; v < sh.d / 2 - 0.08; v += 0.24) {
+                const t2 = Math.max(Math.abs(v) / (sh.d / 2), Math.abs(u) / (sh.w / 2) * 0.9);
+                const block = Math.floor((u + sh.w / 2) / (sh.w / 3));
+                const band = t2 > 0.7 ? R.spill.i : Math.abs(v) < sh.d * 0.18 && Math.abs(u) < sh.w * 0.3 ? R.thriller.i : R.fillers[block % R.fillers.length].i;
+                const vv = band === R.spill.i ? v * 1.1 : v;
+                slot(x + p.dx * u + p.nx * vv, z + p.dz * u + p.nz * vv, y0 + sh.h - (band === R.spill.i ? 0.06 : 0), { band });
               }
             }
           }
@@ -162,7 +295,6 @@ export function buildSites(sites, town) {
           const reach = (ROAD_WIDTH.unclassified / 2) + 9;
           for (const e of town.edges) {
             const mx = (e.A[0] + e.B[0]) / 2, mz = (e.A[1] + e.B[1]) / 2;
-            if (Math.abs(mx - path.pts[0][0]) > path.length + 50 && Math.abs(mz - path.pts[0][1]) > path.length + 50) continue;
             const t = path.closestT(mx, mz);
             if (t < sh.from || t > sh.to) continue;
             const p = path.at(t);
@@ -178,8 +310,10 @@ export function buildSites(sites, town) {
                 const x = e.A[0] + ux * d + e.n[0] * 0.22, z = e.A[1] + uz * d + e.n[1] * 0.22;
                 batch.box(1.5, 0.3, 0.34, x, sill - 0.36, z, -a, MATERIALS.green);
                 units++;
-                for (let q = -0.6; q <= 0.61; q += 0.24) {
-                  slot(x + ux * q + e.n[0] * (r() - 0.5) * 0.12, z + uz * q + e.n[1] * (r() - 0.5) * 0.12, sill - 0.06, { s: 0.72, hm: 0.55 });
+                // back row upright fillers, front row trailing
+                for (let q = -0.6; q <= 0.61; q += 0.2) {
+                  slot(x + ux * q - e.n[0] * 0.06, z + uz * q - e.n[1] * 0.06, sill - 0.06, { band: R.fillers[Math.round((q + 0.6) / 0.4) % R.fillers.length].i, s: 0.7, hm: 0.6 });
+                  slot(x + ux * q + e.n[0] * 0.14, z + uz * q + e.n[1] * 0.14, sill - 0.14, { band: R.spill.i, s: 0.66, hm: 0.4 });
                 }
               }
             }
@@ -211,10 +345,12 @@ export function buildSites(sites, town) {
               const cy = y0 + 3.05;
               batch.cylinder(0.32, 0.36, bx, cy - 0.3, bz, col('#5d4630'), 12, 0.42);
               units++;
-              for (let i = 0, N = 60; i < N; i++) {
-                const yy = 1 - (i / (N - 1)) * 1.6;
+              // a dome of colour on top, a skirt of trailing plants below
+              for (let i = 0, N = 70; i < N; i++) {
+                const yy = 1 - (i / (N - 1)) * 1.7;
                 const rr = Math.sqrt(Math.max(0, 1 - yy * yy)), th = i * 2.39996;
-                slot(bx + Math.cos(th) * rr * 0.55, bz + Math.sin(th) * rr * 0.55, cy + yy * 0.44, { s: 0.62, hm: 0.18 });
+                const band = yy > 0.75 ? R.thriller.i : yy > 0.05 ? R.fillers[Math.floor(((th / (Math.PI * 2)) % 1) * 4) % R.fillers.length].i : R.spill.i;
+                slot(bx + Math.cos(th) * rr * 0.58, bz + Math.sin(th) * rr * 0.58, cy + yy * 0.46, { band, s: 0.62, hm: 0.18 });
               }
             }
           }
@@ -234,8 +370,11 @@ export function buildSites(sites, town) {
                 batch.box(3.2, 0.42, 0.6, x, y0, z, -a, MATERIALS.trough);
                 units++;
                 area += 3.2 * 0.6;
-                for (let u = -1.45; u <= 1.46; u += 0.26) for (const v of [-0.14, 0.14]) {
-                  slot(x + p.dx * u + p.nx * v, z + p.dz * u + p.nz * v, y0 + 0.42, { s: 0.8, hm: 0.7 });
+                for (let u = -1.45; u <= 1.46; u += 0.24) {
+                  const block = Math.floor((u + 1.6) / 1.07);
+                  slot(x + p.dx * u - p.nx * s * 0.1, z + p.dz * u - p.nz * s * 0.1, y0 + 0.42, { band: R.fillers[block % R.fillers.length].i, s: 0.8, hm: 0.7 });
+                  // trailing on both faces of the parapet
+                  for (const v of [-0.34, 0.34]) slot(x + p.dx * u + p.nx * v, z + p.dz * u + p.nz * v, y0 + 0.3, { band: R.spill.i, s: 0.72, hm: 0.4 });
                 }
               }
             }
@@ -243,20 +382,49 @@ export function buildSites(sites, town) {
           break;
         }
         case 'meadow': {
-          const [cx, cz] = sh.c;
-          grid({ x0: cx - sh.r, x1: cx + sh.r, z0: cz - sh.r, z1: cz + sh.r }, 0.55, (x, z) => {
-            const d = Math.hypot(x - cx, z - cz) / sh.r;
-            const edge = d + Math.sin(Math.atan2(z - cz, x - cx) * 3 + si) * 0.12;
-            if (edge < 1 && r() < 0.95 - edge * edge * 0.8 && within(x, z, sh.within)) groundSlot(x, z, groundHeight(x, z) + 0.02, 0.3025, { hm: 0.9 }, true);
+          const [cx, cz] = sh.c, bed = [];
+          triGrid({ x0: cx - sh.r, x1: cx + sh.r, z0: cz - sh.r, z1: cz + sh.r }, 0.5, r, (x, z) => {
+            const d = Math.hypot(x - cx, z - cz);
+            if (d > sh.r || !within(x, z, sh.within) || !groundOk(x, z, true)) return;
+            bed.push(slot(x, z, groundHeight(x, z) + 0.02, { hm: 0.9 }));
           });
+          designBed(bed, R, r, { natural: true, edging: false, drift: 2.2, edgeOf: () => 9, depthOf: () => 0 });
+          area += bed.length * 0.25 * 0.866;
           break;
         }
         case 'meadowpoly': {
-          const b = polyBounds(sh.pts), dens = sh.density ?? 0.8;
-          grid(b, 0.6, (x, z) => {
-            if (r() > dens || !pointInPoly(x, z, sh.pts) || !within(x, z, sh.within)) return;
-            groundSlot(x, z, groundHeight(x, z) + 0.02, 0.36 / dens, { hm: 1.1 }, true);
+          const b = polyBounds(sh.pts), bed = [];
+          triGrid(b, 0.6, r, (x, z) => {
+            if (!pointInPoly(x, z, sh.pts) || !within(x, z, sh.within) || !groundOk(x, z, true)) return;
+            if (r() > (sh.density ?? 0.85)) return;
+            bed.push(slot(x, z, groundHeight(x, z) + 0.02, { hm: 1.1 }));
           });
+          designBed(bed, R, r, { natural: true, edging: false, drift: 3, edgeOf: () => 9, depthOf: () => 0 });
+          area += bed.length * 0.36 * 0.866 / (sh.density ?? 0.85);
+          break;
+        }
+        case 'pathEdges': {
+          // Bulbs or wildflowers lining the footpaths through a park or churchyard
+          const land = sh.within && landByName(sh.within);
+          const inArea = (x, z) => (land ? pointInPoly(x, z, land.p) : true) && (!sh.near || Math.hypot(x - sh.near[0], z - sh.near[1]) < sh.r);
+          const bed = [];
+          for (const seg of DATA.segments) {
+            if (seg.t !== 'road' || !['footway', 'path', 'pedestrian'].includes(seg.c)) continue;
+            if (!seg.p.some(([x, z]) => inArea(x, z))) continue;
+            const path = new Path(seg.p);
+            for (const s of [1, -1]) {
+              for (let t = 0.8; t < path.length - 0.8; t += 0.42) {
+                const p = path.at(t);
+                for (let o = sh.o0; o < sh.o1; o += 0.42 * 0.866) {
+                  const x = p.x + p.nx * o * s + (r() - 0.5) * 0.08, z = p.z + p.nz * o * s + (r() - 0.5) * 0.08;
+                  if (!inArea(x, z) || !groundOk(x, z, true)) continue;
+                  bed.push(slot(x, z, groundHeight(x, z) + 0.02, { hm: 0.9 }));
+                }
+              }
+            }
+          }
+          designBed(bed, R, r, { natural: true, edging: false, drift: 2.2, edgeOf: () => 9, depthOf: () => 0 });
+          area += bed.length * 0.42 * 0.42 * 0.866;
           break;
         }
         case 'ribbon': {
@@ -267,27 +435,15 @@ export function buildSites(sites, town) {
           let row = 0;
           for (let o = -half; o <= half + 1e-6; o += sh.spacing, row++) {
             for (let t = 0; t <= L; t += sh.every) {
-              // lens-shaped taper with a gentle swell so the edge isn't a straight line
               const k = Math.sin(Math.PI * (t / L));
               const w = half * Math.pow(k, 0.7) * (0.88 + 0.12 * Math.sin(t / 9 + row * 0.3));
               if (Math.abs(o) > w) continue;
               const p = path.at(t);
-              const oo = o + (r() - 0.5) * 0.15, tt = (r() - 0.5) * 0.12;
+              const oo = o + (r() - 0.5) * 0.12, tt = (r() - 0.5) * 0.1;
               const x = p.x + p.nx * oo + p.dx * tt, z = p.z + p.nz * oo + p.dz * tt;
-              if (!within(x, z, sh.within)) continue;
-              groundSlot(x, z, groundHeight(x, z), sh.spacing * sh.every, { band: row % 3, s: 1.85 }, true);
-            }
-          }
-          break;
-        }
-        case 'rows': {
-          const b = polyBounds(sh.pts);
-          let row = 0;
-          for (let x = b.x0 + 1; x < b.x1; x += sh.spacing, row++) {
-            for (let z = b.z0; z < b.z1; z += 0.7) {
-              const xx = x + (r() - 0.5) * 0.25, zz = z + (r() - 0.5) * 0.15;
-              if (!pointInPoly(xx, zz, sh.pts) || !within(xx, zz, sh.within)) continue;
-              groundSlot(xx, zz, groundHeight(xx, zz), sh.spacing * 0.7, { band: row % 3, s: 1.6 }, true);
+              if (!within(x, z, sh.within) || !groundOk(x, z, true)) continue;
+              slot(x, z, groundHeight(x, z), { band: (sh.bands || [0, 1, 2])[row % (sh.bands || [0, 1, 2]).length], s: sh.size ?? 1.85, hm: sh.hm ?? 1 });
+              area += sh.spacing * sh.every;
             }
           }
           break;
@@ -315,9 +471,17 @@ export function buildSites(sites, town) {
             const pts = [[-len / 2, 0.5], [len / 2, 0.5], [len / 2, 1.7], [-len / 2, 1.7]].map(([u, v]) => [c[0] + ux * u + e.n[0] * v, c[1] + uz * u + e.n[1] * v]);
             const y0 = Math.min(...pts.map(([x, z]) => groundHeight(x, z)));
             extrude(batch, pts, y0 - 0.1, 0.55, SOIL);
-            extrudeRing(batch, pts, y0 - 0.1, 0.61, MATERIALS.stone);
+            extrudeRing(batch, pts, y0 - 0.1, 0.61, MATERIALS.stone, 0.25);
             units++;
-            grid(polyBounds(pts), 0.32, (x, z) => { if (pointInPoly(x, z, pts)) { slot(x, z, y0 + 0.45); area += 0.1; } });
+            const bed = [];
+            triGrid(polyBounds(pts), 0.3, r, (x, z) => { if (pointInPoly(x, z, pts)) bed.push(slot(x, z, y0 + 0.45)); });
+            // tallest against the wall, edging at the front
+            designBed(bed, R, r, {
+              edgeOf: (q) => { const v = (q.x - e.A[0]) * e.n[0] + (q.z - e.A[1]) * e.n[1]; return 1.7 - v; },
+              depthOf: (q) => { const v = (q.x - e.A[0]) * e.n[0] + (q.z - e.A[1]) * e.n[1]; return 1 - (v - 0.5) / 1.2; },
+              drift: 0.8,
+            });
+            area += bed.length * 0.078;
           }
           break;
         }
@@ -350,15 +514,18 @@ function footprintClear(occ, x, z, w, d, a) {
   return true;
 }
 
-// Soil ribbon alongside a street, broken wherever it would run into a building
-function soilStrip(batch, path, t0, t1, o0, o1, occ) {
+// Soil ribbon alongside a path, broken wherever it would run into a building
+function soilStrip(batch, path, t0, t1, o0, o1, occ, lift = 0.16) {
   const up = [0, 1, 0];
   for (let t = t0; t < t1; t += 1) {
     const a = path.at(t), b = path.at(Math.min(t1, t + 1));
     const mid = path.at(t + 0.5), om = (o0 + o1) / 2;
     if (occ.get(mid.x + mid.nx * om, mid.z + mid.nz * om) === 4) continue;
-    const v = (p, o) => { const x = p.x + p.nx * o, z = p.z + p.nz * o; return [x, groundHeight(x, z) + 0.16, z]; };
+    const v = (p, o) => { const x = p.x + p.nx * o, z = p.z + p.nz * o; return [x, groundHeight(x, z) + lift, z]; };
     batch.quad(v(a, o0), v(a, o1), v(b, o1), v(b, o0), SOIL, null, up);
+    // crisp edging line on both long sides
+    batch.quad(v(a, o0 - 0.08), v(a, o0), v(b, o0), v(b, o0 - 0.08), EDGE, null, up);
+    batch.quad(v(a, o1), v(a, o1 + 0.08), v(b, o1 + 0.08), v(b, o1), EDGE, null, up);
   }
 }
 
@@ -373,14 +540,14 @@ function extrude(batch, pts, y, h, color) {
   g.dispose();
 }
 
-// Stone kerb: a slightly larger outline around a (convex) bed
-function extrudeRing(batch, pts, y, h, color) {
+// Kerb or edging: a slightly larger outline around a (convex) bed
+function extrudeRing(batch, pts, y, h, color, k = 0.25) {
   const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cz = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-  const grow = (k) => pts.map(([x, z]) => {
+  const grow = (d) => pts.map(([x, z]) => {
     const dx = x - cx, dz = z - cz, l = Math.hypot(dx, dz) || 1;
-    return [x + (dx / l) * k, z + (dz / l) * k];
+    return [x + (dx / l) * d, z + (dz / l) * d];
   });
-  const outer = shapeOf(grow(0.25));
+  const outer = shapeOf(grow(k));
   const inner = grow(0).map(([x, z]) => new THREE.Vector2(x, -z));
   if (!THREE.ShapeUtils.isClockWise(inner)) inner.reverse();
   outer.holes.push(new THREE.Path(inner));

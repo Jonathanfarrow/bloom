@@ -474,3 +474,7 @@ details.costs summary { cursor: pointer; font-weight: 600; font-size: 14px; colo
 .route li.out button { color: var(--muted); text-decoration: line-through; }
 .sources { margin: 0; padding-left: 18px; font-size: 13px; }
 .sources a { color: var(--accent); }
+
+.switches { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.switches .seg { margin: 0; }
+.seg button { font-size: 12.5px; padding: 5px 10px; }

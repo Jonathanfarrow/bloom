@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import './style.css';
-import { SITES, SCHEMES, ROLES, LEVEL, PLACE_LABELS, ROUTE, PROGRAMME, JUDGING, VOLUNTEER_RATE, costOf } from './data/sites.js';
+import { SITES, SCHEMES, ROLES, LEVEL, PLACE_LABELS, ROUTE, PROGRAMME, JUDGING, VOLUNTEER_RATE, SOURCING, PRICE_NOTES, costOf } from './data/sites.js';
 import { buildGround, buildBridges } from './world/ground.js';
 import { buildTown } from './world/buildings.js';
 import { buildTrees } from './world/trees.js';
@@ -31,6 +31,7 @@ const state = {
   view: 'site',
   plan: store.get('hib-plan-v2', {}),
   model: store.get('hib-model-v1', 'volunteer'),
+  sourcing: store.get('hib-sourcing-v1', 'mixed'),
   ideas: store.get('hib-ideas-v1', []),
   pendingIdea: null,
 };
@@ -254,7 +255,7 @@ const range = ([lo, hi]) => (roundMoney(lo) === roundMoney(hi) ? gbp(lo) : `${gb
 const short = (n) => (n >= 1000 ? `£${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : gbp(n));
 const shortRange = ([lo, hi]) => (roundMoney(lo) === roundMoney(hi) ? short(lo) : `${short(lo)}–${short(hi)}`);
 const hrs = (h) => (h >= 100 ? Math.round(h / 10) * 10 : Math.round(h)).toLocaleString('en-GB');
-const siteCost = (id, opt = optionOf(id)) => costOf(opt, optionInfo.get(`${id}:${opt.id}`), state.model);
+const siteCost = (id, opt = optionOf(id)) => costOf(opt, optionInfo.get(`${id}:${opt.id}`), state.model, state.sourcing);
 const routeNo = (id) => ROUTE.indexOf(id) + 1;
 const orderedSites = () => [...SITES].sort((a, b) => routeNo(a.id) - routeNo(b.id));
 
@@ -284,6 +285,12 @@ function planTotals() {
   return t;
 }
 function savePlan() { store.set('hib-plan-v2', state.plan); }
+function setSourcing(v) {
+  state.sourcing = v;
+  store.set('hib-sourcing-v1', v);
+  renderList();
+  if (state.view === 'plan') renderPlan(); else if (state.view === 'judging') renderJudging(); else renderDetail();
+}
 function setModel(m) {
   state.model = m;
   store.set('hib-model-v1', m);
@@ -326,7 +333,7 @@ function renderList() {
 }
 function renderPlanBar() {
   const t = planTotals();
-  $('#plan-bar').innerHTML = `<div><span class="pb-label">Your plan · ${t.count} sites · ${state.model === 'volunteer' ? 'volunteer-led' : 'contractor'}</span>
+  $('#plan-bar').innerHTML = `<div><span class="pb-label">Your plan · ${t.count} sites · ${state.model === 'volunteer' ? 'volunteer-led' : 'contractor'} · ${state.sourcing === 'retail' ? 'shop-bought' : 'wholesale'}</span>
     <span class="pb-figs"><b>${shortRange(t.setup)}</b> set-up · <b>${shortRange(t.annual)}</b> a year${state.model === 'volunteer' ? `<br /><b>${hrs(t.yearHours)}</b> volunteer hours a year` : ''}</span></div>
     <button class="primary small" id="open-plan">Plan &amp; costs</button>`;
 }
@@ -372,9 +379,13 @@ function setOption(id, optId) {
   renderDetail(); renderList();
 }
 
-const modelSwitch = () => `<div class="seg" role="group" aria-label="Who does the work">
-  <button data-model="volunteer" aria-pressed="${state.model === 'volunteer'}">Volunteer-led</button>
-  <button data-model="contractor" aria-pressed="${state.model === 'contractor'}">Contractor</button></div>`;
+const modelSwitch = () => `<div class="switches">
+  <div class="seg" role="group" aria-label="Who does the work">
+    <button data-model="volunteer" aria-pressed="${state.model === 'volunteer'}">Volunteer-led</button>
+    <button data-model="contractor" aria-pressed="${state.model === 'contractor'}">Contractor</button></div>
+  <div class="seg" role="group" aria-label="How plants are bought">
+    ${Object.entries(SOURCING).map(([k, v]) => `<button data-sourcing="${k}" aria-pressed="${state.sourcing === k}">${v.name}</button>`).join('')}</div>
+  </div>`;
 
 // ---------- UI: site detail ----------
 const fmt = (n) => Math.round(n).toLocaleString('en-GB');
@@ -422,7 +433,7 @@ function renderDetail() {
         <tr class="grp"><th colspan="2">Each year</th></tr>${c.annual.length ? costRows(c.annual) : '<tr><td>No running costs: bulbs come back every year</td><td class="h">£0</td></tr>'}
         <tr class="tot"><td>Yearly total${vol && c.yearHours ? `<em>plus about ${hrs(c.yearHours)} volunteer hours</em>` : ''}</td><td class="h">${range(c.annualTotal)}</td></tr></tbody>
       </table>
-      <p class="fine">${vol ? 'Volunteer-led: volunteers do the planting, watering and weeding, so only materials are costed. Traffic management, work at height and structural fixings stay with contractors.' : 'Contractor: all labour is paid.'} Indicative UK prices. Get quotes before bidding.</p>
+      <p class="fine">Plants: ${SOURCING[state.sourcing].name.toLowerCase()}${state.sourcing === 'mixed' ? ' (80% trade plugs, bulbs and seed, 20% from local shops)' : ''}. ${vol ? 'Volunteer-led: volunteers do the planting, watering and weeding, so only materials are costed. Traffic management, work at height and structural fixings stay with contractors.' : 'Contractor: all labour is paid.'} Indicative UK prices. Get quotes before bidding.</p>
     </details>
     <h3 class="section-label">What the judges will see</h3>
     <div class="pillars">${Object.entries(pl).map(([k, v]) => `<span class="pill-${k}"><i style="--v:${v}"></i>${PILLAR_SHORT[k]}: ${LEVEL[v]}</span>`).join('')}</div>
@@ -453,6 +464,8 @@ function renderDetail() {
 $('#detail-body').addEventListener('click', (e) => {
   const mb = e.target.closest('[data-model]');
   if (mb) return setModel(mb.dataset.model);
+  const sb = e.target.closest('[data-sourcing]');
+  if (sb) return setSourcing(sb.dataset.sourcing);
   const ob = e.target.closest('[data-opt]');
   if (ob && state.selected) return setOption(state.selected, ob.dataset.opt);
   const go = e.target.closest('[data-go]');
@@ -504,7 +517,11 @@ function renderPlan() {
       </tbody>
     </table>
     ${left.length ? `<p class="fine">Not included: ${left.map((s) => s.name).join(', ')}. Tick them in the list to add them.</p>` : ''}
-    <p class="fine">Ranges use indicative UK prices and quantities measured from the model. Ownership and permissions are to be confirmed site by site. Sponsorship (baskets, roundabout, planters) can reduce the council's share further.</p>
+    <details class="costs"><summary>Where the prices come from</summary>
+      <ul class="sources">${PRICE_NOTES.map(([n, u]) => `<li><a href="${u}" target="_blank" rel="noopener">${n}</a></li>`).join('')}</ul>
+      <p class="fine">Containers, signs and specialist work are typical trade prices. Plants use the mix chosen above. Free woodchip from local tree surgeons, donated plants and cuttings grown by volunteers would bring costs down further.</p>
+    </details>
+    <p class="fine">Ranges use UK supplier prices and quantities measured from the model. Ownership and permissions are to be confirmed site by site. Sponsorship (baskets, roundabout, planters) can reduce the council's share further.</p>
     <div class="row"><button class="primary" id="copy-plan">Copy plan for the council paper</button><button class="secondary" id="open-judging">How to win</button></div>
     <textarea id="plan-text" class="plan-text" rows="8" hidden aria-label="Plan text"></textarea>`;
   $('#detail').hidden = false;
@@ -550,7 +567,7 @@ function planText() {
   const lines = [
     'HITCHIN IN BLOOM: PROPOSED PLANTING PLAN',
     '',
-    `${t.count} sites, ${vol ? 'delivered by volunteers with contractors for specialist work' : 'delivered by contractors'}.`,
+    `${t.count} sites, ${vol ? 'delivered by volunteers with contractors for specialist work' : 'delivered by contractors'}. Plants bought: ${SOURCING[state.sourcing].name.toLowerCase()}.`,
     `Set-up ${range(t.setup)} (including 10% contingency). Running costs ${range(t.annual)} a year.`,
     vol ? `Volunteer time: about ${hrs(t.setupHours)} hours to plant, then ${hrs(t.yearHours)} hours a year (about ${t.volunteers} regular volunteers), worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year as in-kind match funding.` : '',
     'Figures are indicative ranges for budgeting, based on typical UK prices and quantities measured from a 3D model of the town. Quotes to follow.',

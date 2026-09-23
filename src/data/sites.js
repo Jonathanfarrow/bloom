@@ -116,51 +116,85 @@ export const SCHEMES = {
 };
 
 // ---------------------------------------------------------------------------
-// Costs. Indicative UK prices (2025/26) for budgeting only: get quotes before
-// bidding. Each rate splits into materials and labour so the plan can be costed
-// as a volunteer-led programme (volunteers replace labour where they safely can)
-// or fully contracted.
-//   q:   'area' (m², measured from the model), 'units' (containers counted from
-//        the model) or a fixed number
-//   mat / lab: £ per unit, low–high
-//   vol: volunteer hours per unit when volunteers do the work (0 = must be paid)
+// Costs. Budget figures from UK supplier prices seen online in 2025/26 (see
+// PRICE_NOTES); get quotes before bidding.
+//
+// Plant material is priced per plant (or per m² of seed) for each way of buying:
+//   wholesale: trade plug plants, liners and bulbs by the thousand, bulk seed
+//   retail:    local garden centre or shop prices
+// SOURCING mixes the two; the default is mostly wholesale with some bought locally.
 // ---------------------------------------------------------------------------
+export const PRICES = {
+  lavender: { wholesale: [0.7, 1.5], retail: [4.5, 6.5], unit: 'plant' },       // plugs/9 cm liners vs 9 cm pots in a shop
+  perennial: { wholesale: [0.8, 2.0], retail: [4, 7], unit: 'plant' },
+  bedding: { wholesale: [0.12, 0.25], retail: [0.35, 0.6], unit: 'plant' },     // plug plants
+  bulb: { wholesale: [0.06, 0.15], retail: [0.25, 0.45], unit: 'bulb' },
+  wildSeed: { wholesale: [0.11, 0.17], retail: [0.4, 0.6], unit: 'm² of seed' }, // £28–43/kg bulk vs small packs, sown at 4 g/m²
+  wildPlug: { wholesale: [0.45, 0.8], retail: [1, 1.5], unit: 'plant' },
+  compost: { wholesale: [2, 4], retail: [6, 8], unit: 'm² (5 cm layer)' },       // bulk bag £40–80/m³ vs 50 L bags
+  mulch: { wholesale: [2, 4], retail: [5, 7], unit: 'm² (5 cm layer)' },         // bulk bark; free woodchip from tree surgeons cuts this to nothing
+};
+export const SOURCING = {
+  mixed: { name: 'Wholesale + local shops', wholesale: 0.8 },
+  wholesale: { name: 'All wholesale', wholesale: 1 },
+  retail: { name: 'All shop-bought', wholesale: 0 },
+};
+export const PRICE_NOTES = [
+  ['Wildflower seed £28–43/kg bulk, sown at 4 g/m²', 'https://www.thegrassseedstore.co.uk/supplier/environmental/wildflower-meadow-seed/native-economy-mix/'],
+  ['Lavender Hidcote: £6.39 retail, £3.35–3.45 per 9 cm pot by the hundred; plug trays of 84 cheaper', 'https://www.ashridgetrees.co.uk/products/hidcote-english-lavender-plants'],
+  ['Crocus tommasinianus £6.39 for 25 retail; wholesale by the thousand', 'https://www.dutchbulbs.co.uk/plant-0000037/crocus-tommasinianus-barrs-purple.htm'],
+  ['Peat-free compost about £40–80 per 1 m³ bulk bag', 'https://www.gardencalc.uk/compost-calculator'],
+  ['Hanging basket plants from about £0.30 each (20 for £5.99)', 'https://www.dobies.co.uk/email/nurserymans-choice-hanging-basket'],
+];
+
+// Price of one item for a sourcing mix → [low, high]
+export function price(item, sourcing = 'mixed') {
+  const p = PRICES[item], w = SOURCING[sourcing].wholesale;
+  return [p.wholesale[0] * w + p.retail[0] * (1 - w), p.wholesale[1] * w + p.retail[1] * (1 - w)];
+}
+const add = (...rs) => rs.reduce((a, r) => [a[0] + r[0], a[1] + r[1]], [0, 0]);
+const times = (n, r) => [r[0] * n, r[1] * n];
+
+// Each rate: q = 'area' (m², measured from the model), 'units' (containers counted
+// from the model) or a fixed number. mat is £ per unit (or a function of the
+// sourcing mix for plant material), lab is paid labour, vol is volunteer hours
+// per unit when volunteers can safely do the work (0 = must be paid).
 export const RATES = {
-  bedPrep: { label: 'Bed preparation, peat-free compost and edging', q: 'area', mat: [8, 15], lab: [7, 15], vol: 0.3 },
-  bedding: { label: 'Seasonal bedding, two plantings a year', q: 'area', mat: [18, 30], lab: [37, 55], vol: 0.8 },
-  perennialPlant: { label: 'Perennial plants (6 per m²) and mulch', q: 'area', mat: [18, 30], lab: [12, 20], vol: 0.25 },
-  perennialCare: { label: 'Weeding, cutting back, top-up plants', q: 'area', mat: [1, 2], lab: [3, 6], vol: 0.3 },
-  lavenderPlant: { label: 'Lavender plants (4 per m²), ground prep, mulch', q: 'area', mat: [12, 18], lab: [6, 10], vol: 0.2 },
-  lavenderCare: { label: 'Late-summer trim and weeding', q: 'area', mat: [0, 0.5], lab: [2, 3.5], vol: 0.06 },
-  meadowPrep: { label: 'Ground preparation (machinery)', q: 'area', mat: [0, 0], lab: [1, 3], vol: 0 },
-  meadowSeed: { label: 'Native wildflower seed, sown by hand', q: 'area', mat: [0.8, 1.5], lab: [0.2, 0.5], vol: 0.01 },
-  meadowPlugs: { label: 'Wildflower plug plants and seed', q: 'area', mat: [5, 9], lab: [3, 6], vol: 0.15 },
-  meadowCut: { label: 'Annual cut and collect (machinery)', q: 'area', mat: [0, 0], lab: [0.4, 1], vol: 0 },
-  bulbs: { label: 'Bulbs (25 per m²) and planting', q: 'area', mat: [3.5, 7], lab: [3, 6], vol: 0.25 },
-  basket: { label: 'Basket, liner and bracket', q: 'units', mat: [45, 80], lab: [0, 0], vol: 0 },
+  bedPrep: { label: 'Peat-free compost dug in', q: 'area', mat: (P) => P('compost'), lab: [7, 15], vol: 0.3 },
+  bedding: { label: 'Bedding plugs, two plantings a year (20 per m² each)', q: 'area', mat: (P) => add(times(40, P('bedding')), [0.3, 0.8]), lab: [37, 55], vol: 0.8 },
+  perennialPlant: { label: 'Perennials (6 per m²) and bark mulch', q: 'area', mat: (P) => add(times(6, P('perennial')), P('mulch')), lab: [12, 20], vol: 0.25 },
+  perennialCare: { label: 'Weeding, cutting back, a few replacements', q: 'area', mat: [0.3, 1], lab: [3, 6], vol: 0.3 },
+  lavenderPlant: { label: 'Lavender (3.5 per m²) and gravel/bark mulch', q: 'area', mat: (P) => add(times(3.5, P('lavender')), times(0.6, P('mulch'))), lab: [6, 10], vol: 0.2 },
+  lavenderCare: { label: 'Late-summer trim and weeding', q: 'area', mat: [0, 0.1], lab: [2, 3.5], vol: 0.06 },
+  meadowPrep: { label: 'Ground preparation (hired machinery and operator)', q: 'area', mat: [0, 0], lab: [0.4, 1.2], vol: 0 },
+  meadowSeed: { label: 'Native wildflower seed, sown by hand (4 g/m²)', q: 'area', mat: (P) => P('wildSeed'), lab: [0.2, 0.5], vol: 0.01 },
+  meadowPlugs: { label: 'Wildflower plugs (3 per m²) plus seed', q: 'area', mat: (P) => add(times(3, P('wildPlug')), P('wildSeed')), lab: [3, 6], vol: 0.15 },
+  meadowCut: { label: 'Annual cut and collect (machinery)', q: 'area', mat: [0, 0], lab: [0.3, 0.8], vol: 0 },
+  bulbs: { label: 'Bulbs (25 per m²)', q: 'area', mat: (P) => times(25, P('bulb')), lab: [3, 6], vol: 0.25 },
+  basket: { label: 'Basket, liner and lamp-column bracket', q: 'units', mat: [30, 60], lab: [0, 0], vol: 0 },
   basketFit: { label: 'Structural check and bracket fitting on lamp columns', q: 'units', mat: [0, 0], lab: [40, 80], vol: 0 },
-  basketPlanting: { label: 'Plants, peat-free compost, feed; planting up', q: 'units', mat: [25, 40], lab: [15, 25], vol: 0.75 },
+  basketPlanting: { label: 'Plants (12 per basket), compost, feed; planting up', q: 'units', mat: (P) => add(times(12, P('bedding')), [3, 5]), lab: [15, 25], vol: 0.75 },
   basketHang: { label: 'Hanging and taking down (access equipment)', q: 'units', mat: [0, 0], lab: [15, 30], vol: 0 },
-  basketWater: { label: 'Watering, June to September (lance from the ground)', q: 'units', mat: [2, 5], lab: [50, 85], vol: 6 },
-  planterLarge: { label: 'Large planter (1.2–1.5 m), delivered', q: 'units', mat: [700, 1500], lab: [0, 0], vol: 0 },
-  planterLargeCare: { label: 'Two plantings a year and watering', q: 'units', mat: [110, 180], lab: [140, 270], vol: 12 },
-  planterTimber: { label: 'Timber street planter, delivered', q: 'units', mat: [350, 700], lab: [0, 0], vol: 0 },
-  planterTimberCare: { label: 'Perennial and bulb care, watering', q: 'units', mat: [25, 45], lab: [35, 75], vol: 4 },
-  trough: { label: 'Parapet trough and fixing to the bridge', q: 'units', mat: [150, 300], lab: [50, 100], vol: 0 },
-  troughCare: { label: 'Planting and watering', q: 'units', mat: [25, 40], lab: [45, 80], vol: 5 },
-  windowBox: { label: 'Matching window box, supplied to the business', q: 'units', mat: [45, 80], lab: [0, 0], vol: 0 },
-  raisedBed: { label: 'Stone-faced raised bed (built by a contractor)', q: 'units', mat: [600, 1100], lab: [600, 1400], vol: 0 },
-  centrepiece: { label: 'Tiered centrepiece planter', q: 1, mat: [3000, 6000], lab: [0, 0], vol: 0 },
-  centrepieceCare: { label: 'Centrepiece planting and watering', q: 1, mat: [250, 400], lab: [450, 700], vol: 30 },
+  basketWater: { label: 'Watering, June to September (lance from the ground)', q: 'units', mat: [1, 3], lab: [50, 85], vol: 6 },
+  planterLarge: { label: 'Large planter (1.2–1.5 m), delivered', q: 'units', mat: [400, 1000], lab: [0, 0], vol: 0 },
+  planterLargeCare: { label: 'Two plantings a year (60 plants), compost top-up, watering', q: 'units', mat: (P) => add(times(60, P('bedding')), [5, 10]), lab: [140, 270], vol: 12 },
+  planterTimber: { label: 'Timber street planter, delivered', q: 'units', mat: [250, 550], lab: [0, 0], vol: 0 },
+  planterTimberCare: { label: 'Perennial and bulb top-ups, watering', q: 'units', mat: (P) => add(times(3, P('perennial')), times(20, P('bulb'))), lab: [35, 75], vol: 4 },
+  trough: { label: 'Parapet trough and fixing to the bridge', q: 'units', mat: [100, 220], lab: [50, 100], vol: 0 },
+  troughCare: { label: 'Two plantings (24 plants), compost, watering', q: 'units', mat: (P) => add(times(24, P('bedding')), [2, 4]), lab: [45, 80], vol: 5 },
+  windowBox: { label: 'Matching window box, supplied to the business', q: 'units', mat: [20, 40], lab: [0, 0], vol: 0 },
+  raisedBed: { label: 'Stone-faced raised bed (built by a contractor)', q: 'units', mat: [500, 1000], lab: [600, 1400], vol: 0 },
+  centrepiece: { label: 'Tiered centrepiece planter', q: 1, mat: [2000, 4500], lab: [0, 0], vol: 0 },
+  centrepieceCare: { label: 'Centrepiece: two plantings (300 plants), compost, watering', q: 1, mat: (P) => add(times(300, P('bedding')), [20, 40]), lab: [450, 700], vol: 30 },
   trafficMgmt: { label: 'Traffic management, 3 visits a year (must be paid)', q: 3, mat: [0, 0], lab: [250, 600], vol: 0 },
-  sign: { label: 'Sponsor or interpretation sign', q: 1, mat: [400, 900], lab: [0, 0], vol: 0 },
+  sign: { label: 'Sponsor or interpretation sign', q: 1, mat: [200, 600], lab: [0, 0], vol: 0 },
   coordination: { label: 'Scheme coordination and publicity', q: 1, mat: [0, 0], lab: [300, 800], vol: 20 },
 };
 
 // Running a volunteer programme has its own costs. Contractors include these in their prices.
 export const PROGRAMME = [
-  { label: 'Tools, gloves, kneelers, first-aid kits', capital: [600, 1500], annual: [100, 300], when: 'volunteer' },
-  { label: 'Watering bowser on a trailer (about 1,000 litres)', capital: [1500, 3500], annual: [200, 500], when: 'containers' },
+  { label: 'Tools, gloves, kneelers, first-aid kits', capital: [400, 1000], annual: [100, 250], when: 'volunteer' },
+  { label: 'Watering bowser on a trailer (about 1,000 litres), or IBC tanks filled from water butts', capital: [600, 2500], annual: [100, 400], when: 'containers' },
   { label: 'Group insurance (RHS community group scheme, check cover)', capital: [0, 0], annual: [100, 300], when: 'volunteer' },
   { label: 'Volunteer training: first aid, working safely near roads', capital: [0, 0], annual: [200, 600], when: 'volunteer' },
   { label: 'Anglia in Bloom entry and judges’ briefing notes (check current fee)', capital: [0, 0], annual: [250, 700], when: 'always' },
@@ -208,9 +242,9 @@ export const SITES = [
     options: [
       {
         id: 'lavender', name: 'Lavender ribbon', scheme: 'lavender',
-        summary: 'A sweeping ribbon of lavender that follows the curve of the hill, with rows running along the slope like a Hitchin lavender field. It can be planted in phases over two or three years.',
+        summary: 'A sweeping ribbon of lavender high on the hill, curving from the west face round towards the summit, with rows running along the slope like a Hitchin lavender field. It sits above the Mount Garrison flats, so it can be seen over them. It can be planted in phases over two or three years.',
         maintenance: 0, impact: 2, wildlife: 2,
-        shapes: [{ kind: 'ribbon', pts: [[384, -122], [381, -106], [381, -90], [383, -75], [385, -60], [385, -45], [384, -31], [388, -18], [394, -7], [402, 3], [412, 13]], width: 16, spacing: 1.5, every: 0.75, within: 'Windmill Hill' }],
+        shapes: [{ kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], width: 16, spacing: 1.5, every: 0.75, within: 'Windmill Hill' }],
         capital: ['lavenderPlant', 'sign'], annual: ['lavenderCare'],
       },
       {
@@ -225,9 +259,9 @@ export const SITES = [
         summary: 'Drifts of crocus and daffodils across the slope. A spring spectacle that suits community planting days, with no running costs.',
         maintenance: 0, impact: 1, wildlife: 1,
         shapes: [
-          { kind: 'meadow', c: [390, -62], r: 20, within: 'Windmill Hill' },
-          { kind: 'meadow', c: [410, -20], r: 17, within: 'Windmill Hill' },
-          { kind: 'meadow', c: [385, -5], r: 13, within: 'Windmill Hill' },
+          { kind: 'meadow', c: [432, -18], r: 16, within: 'Windmill Hill' },
+          { kind: 'meadow', c: [452, 14], r: 19, within: 'Windmill Hill' },
+          { kind: 'meadow', c: [478, 46], r: 15, within: 'Windmill Hill' },
         ],
         capital: ['bulbs'], annual: [],
       },
@@ -611,13 +645,15 @@ export const PLACE_LABELS = [
 
 // Cost of one option, given quantities measured from the model and the delivery model
 // ('volunteer' or 'contractor'). Returns paid costs and volunteer hours.
-export function costOf(option, measured, model = 'volunteer') {
+export function costOf(option, measured, model = 'volunteer', sourcing = 'mixed') {
+  const P = (item) => price(item, sourcing);
   const lines = (keys) => keys.map((k) => {
     const r = RATES[k];
+    const mat = typeof r.mat === 'function' ? r.mat(P) : r.mat;
     const qty = r.q === 'area' ? measured.area : r.q === 'units' ? measured.units : r.q;
     const byVolunteers = model === 'volunteer' && r.vol > 0;
-    const lo = (r.mat[0] + (byVolunteers ? 0 : r.lab[0])) * qty, hi = (r.mat[1] + (byVolunteers ? 0 : r.lab[1])) * qty;
-    return { label: r.label, qty, kind: r.q === 'area' || r.q === 'units' ? r.q : 'fixed', lo, hi, hours: byVolunteers ? r.vol * qty : 0, byVolunteers, paidLabour: !byVolunteers && r.lab[1] > 0 };
+    const lo = (mat[0] + (byVolunteers ? 0 : r.lab[0])) * qty, hi = (mat[1] + (byVolunteers ? 0 : r.lab[1])) * qty;
+    return { label: r.label, qty, kind: r.q === 'area' || r.q === 'units' ? r.q : 'fixed', plant: typeof r.mat === 'function', lo, hi, hours: byVolunteers ? r.vol * qty : 0, byVolunteers, paidLabour: !byVolunteers && r.lab[1] > 0 };
   });
   const capital = lines(option.capital), annual = lines(option.annual);
   const sum = (ls) => ls.reduce((a, l) => [a[0] + l.lo, a[1] + l.hi], [0, 0]);

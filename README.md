@@ -46,11 +46,18 @@ to the council, businesses, sponsors and residents.
 
 ## About the costs
 
-The costs are **indicative ranges for budgeting**, not quotes. They're built
-from typical UK supplier and contractor prices (see `RATES` in
-`src/data/sites.js`) multiplied by quantities measured from the model. Adjust
-the rates once you have real quotes, and every figure updates. Land ownership
-and permissions are listed as "to confirm" on every site.
+Costs are **budget ranges**, not quotes. Plant material is priced per plant
+(or per m² of seed) from UK supplier prices seen online, for example
+wildflower seed at £28–43/kg sown at 4 g/m², lavender plugs and 9 cm liners by
+the hundred, and bulbs by the thousand. The sources are listed under "Where the
+prices come from" in the app. A switch chooses how plants are bought:
+
+- **Wholesale + local shops** (default): 80% trade plugs, bulbs and seed, 20% bought locally
+- **All wholesale**
+- **All shop-bought**
+
+Rates live in `PRICES` and `RATES` in `src/data/sites.js`. Change them once
+you have quotes and every figure in the app updates.
 
 ## Running it
 

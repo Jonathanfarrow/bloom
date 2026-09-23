@@ -24,12 +24,14 @@ export const SCHEMES = {
     perM2: 4,
     note: 'A nod to the lavender fields Hitchin has been known for since the 1500s. Drought-tolerant, loved by bees.',
     plants: [
-      { name: "English lavender 'Hidcote'", latin: 'Lavandula angustifolia', color: '#5b3f94', form: 'spike', h: 0.5, share: 0.34 },
-      { name: "English lavender 'Munstead'", latin: 'Lavandula angustifolia', color: '#8b73c4', form: 'spike', h: 0.45, share: 0.24 },
-      { name: 'Catmint', latin: 'Nepeta × faassenii', color: '#9aa6e2', form: 'spike', h: 0.4, share: 0.12 },
-      { name: 'Cotton lavender', latin: 'Santolina chamaecyparissus', color: '#e6cf3f', form: 'ball', h: 0.3, share: 0.07 },
-      { name: "Lamb's ear", latin: 'Stachys byzantina', color: '#c4ccbd', form: 'foliage', h: 0.25, share: 0.07 },
-      { name: "White lavender 'Edelweiss'", latin: 'Lavandula × intermedia', color: '#f1f0f7', form: 'spike', h: 0.6, share: 0.16 },
+      { name: "English lavender 'Hidcote'", latin: 'Lavandula angustifolia', color: '#5b3f94', form: 'spike', h: 0.5, share: 0.24 },
+      { name: "English lavender 'Munstead'", latin: 'Lavandula angustifolia', color: '#8b73c4', form: 'spike', h: 0.45, share: 0.14 },
+      { name: 'Catmint', latin: 'Nepeta × faassenii', color: '#9aa6e2', form: 'spike', h: 0.4, share: 0.08 },
+      { name: 'Cotton lavender', latin: 'Santolina chamaecyparissus', color: '#e6cf3f', form: 'ball', h: 0.3, share: 0.08 },
+      { name: "Lamb's ear", latin: 'Stachys byzantina', color: '#c4ccbd', form: 'foliage', h: 0.25, share: 0.04 },
+      { name: "White lavender 'Edelweiss'", latin: 'Lavandula × intermedia', color: '#f1f0f7', form: 'spike', h: 0.6, share: 0.12 },
+      { name: "Pink lavender 'Hidcote Pink'", latin: 'Lavandula angustifolia', color: '#e7a3cf', form: 'spike', h: 0.45, share: 0.14 },
+      { name: "Lavandin 'Grosso'", latin: 'Lavandula × intermedia', color: '#6e4fc0', form: 'spike', h: 0.75, share: 0.16 },
     ],
   },
   pollinator: {
@@ -300,15 +302,16 @@ export const SITES = [
     partners: ['Community planting days', 'Local schools and scout groups', 'Sponsor for an interpretation board'],
     options: [
       {
-        id: 'lavender', name: 'Lavender waves', scheme: 'lavender', also: ['pollinator'],
-        summary: 'Three sweeping stripes following the slope that faces the town: a broad ribbon of deep-purple Hidcote and Munstead lavender, a narrower stripe of white lavender below it, and a band of red poppies, blue cornflowers and ox-eye daisies above, with mown paths between them to walk through. It sits above the Mount Garrison flats, so it can be seen over them, and from the town it reads like a Hertfordshire lavender farm. It can be planted in phases over two or three years.',
+        id: 'lavender', name: 'Four lavender banks', scheme: 'lavender',
+        summary: 'Four big banks of lavender stepping along the side of the hill that faces the town, each a different colour, with mown paths between them to walk through: deep-purple Hidcote striped with white, soft pink lavender with Munstead, tall violet lavandin with rows of golden cotton lavender, and blue Munstead with rows of catmint. Seen from the town they read as four blocks of colour, like the terraces of a lavender farm. They sit above the Mount Garrison flats, and can be planted one bank a year.',
         maintenance: 0, impact: 2, wildlife: 2,
         shapes: [
-          { kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], width: 18, spacing: 1.5, every: 0.75, within: 'Windmill Hill' },
-          { kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], offset: 14, width: 7, spacing: 1.5, every: 0.75, bands: [5, 5, 1], within: 'Windmill Hill' },
-          { kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], offset: -15, width: 9, spacing: 0.65, every: 0.4, size: 1.5, hm: 1.1, scheme: 'pollinator', natural: true, measure: 'meadow', within: 'Windmill Hill' },
+          { kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], from: 0, to: 24, square: 0.3, width: 17, spacing: 1.0, every: 0.55, size: 2.0, bands: [0, 0, 5], within: 'Windmill Hill' },
+          { kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], from: 27, to: 47, square: 0.3, width: 17, spacing: 1.0, every: 0.55, size: 2.0, bands: [6, 6, 1], within: 'Windmill Hill' },
+          { kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], from: 55, to: 83, square: 0.3, width: 17, spacing: 1.0, every: 0.55, size: 2.0, bands: [7, 7, 3], within: 'Windmill Hill' },
+          { kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], from: 87, to: 115, square: 0.3, width: 17, spacing: 1.0, every: 0.55, size: 2.0, bands: [1, 1, 2], within: 'Windmill Hill' },
         ],
-        capital: ['lavenderPlant', 'establish', 'cornfield', 'sign'], annual: ['lavenderCare', 'cornfieldResow'],
+        capital: ['lavenderPlant', 'establish', 'sign'], annual: ['lavenderCare'],
       },
       {
         id: 'bulbs', name: 'River of crocus', scheme: 'bulbs',

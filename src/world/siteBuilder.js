@@ -505,9 +505,11 @@ export function buildSites(sites, town) {
           const L = path.length, half = sh.width / 2;
           let row = 0;
           for (let o = -half; o <= half + 1e-6; o += sh.spacing, row++) {
-            for (let t = 0; t <= L; t += sh.every) {
-              const k = Math.sin(Math.PI * (t / L));
-              const w = half * Math.pow(k, 0.7) * (0.88 + 0.12 * Math.sin(t / 9 + row * 0.3));
+            // from/to (metres along the line) cut out one bank; square < 0.7 gives fuller, rounder-ended blocks
+            const t0 = sh.from ?? 0, t1 = Math.min(L, sh.to ?? L);
+            for (let t = t0; t <= t1; t += sh.every) {
+              const k = Math.sin(Math.PI * ((t - t0) / (t1 - t0)));
+              const w = half * Math.pow(k, sh.square ?? 0.7) * (0.88 + 0.12 * Math.sin(t / 9 + row * 0.3));
               if (Math.abs(o) > w) continue;
               const p = path.at(t);
               const oo = o + (r() - 0.5) * 0.12, tt = (r() - 0.5) * 0.1;

@@ -1,8 +1,9 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { DATA, HALF_W, HALF_H, groundHeight } from './geo.js';
 import { pointInPoly, polyBounds, polyArea, rng } from './util.js';
 
-const TREE_GREENS = ['#4f7d3a', '#5b8a3f', '#6a9644', '#44713a', '#789f4a', '#3f6b3c'];
+const TREE_GREENS = ['#5e8f45', '#6c9a4a', '#7aa652', '#57864a', '#86ab58', '#4f7d44', '#93b25f'];
 const DENSITY = { wood: 90, forest: 90, scrub: 160, park: 700, recreation_ground: 900, cemetery: 350, grave_yard: 300, garden: 400, village_green: 900, school: 1400, meadow: 2500, grassland: 2500 };
 
 // Trees from the map where they are mapped individually, plus scattered trees in
@@ -47,35 +48,57 @@ export function buildTrees(occ) {
     add(x, z, 0.72 + r() * 0.3);
   }
 
-  const trunkGeo = new THREE.CylinderGeometry(0.22, 0.35, 1, 6).translate(0, 0.5, 0);
-  const roundGeo = new THREE.IcosahedronGeometry(1, 0);
-  const coneGeo = new THREE.ConeGeometry(1, 2.4, 7).translate(0, 0.9, 0);
-  const trunkMat = new THREE.MeshStandardMaterial({ color: '#6b5140', roughness: 1 });
-  const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true });
+  // Fluffy model-railway crowns: a few lumpy blobs merged, darker underneath
+  const blob = (x, y, z, r, seed, detail = 0) => {
+    const g = new THREE.IcosahedronGeometry(r, detail);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i);
+      const n = 1 + 0.16 * Math.sin(vx * 3.1 + seed) * Math.cos(vz * 2.7 + seed) + 0.08 * Math.sin(vy * 4.3 + seed * 2);
+      p.setXYZ(i, vx * n + x, vy * n * 0.9 + y, vz * n + z);
+    }
+    return g;
+  };
+  const shade = (g) => {
+    const p = g.attributes.position, c = new Float32Array(p.count * 3);
+    g.computeBoundingBox();
+    const { min, max } = g.boundingBox;
+    for (let i = 0; i < p.count; i++) {
+      const k = 0.62 + 0.38 * ((p.getY(i) - min.y) / (max.y - min.y));
+      c.set([k, k, k * 0.95], i * 3);
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    return g;
+  };
+  const merge = (parts) => shade(mergeGeometries(parts.map((g) => g.toNonIndexed())));
+  const roundGeo = merge([blob(0, 0, 0, 1, 1, 1), blob(0.55, 0.35, 0.2, 0.7, 2), blob(-0.5, 0.3, -0.25, 0.72, 3), blob(0.05, 0.75, 0.1, 0.62, 4), blob(-0.1, 0.1, 0.6, 0.6, 5)]);
+  roundGeo.computeVertexNormals();
+  const coneGeo = merge([0, 1, 2, 3].map((k) => new THREE.ConeGeometry(1 - k * 0.2, 1.1, 8).translate(0, 0.35 + k * 0.55, 0)));
+  const trunkGeo = new THREE.CylinderGeometry(0.2, 0.34, 1, 6).translate(0, 0.5, 0);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: '#6e5646', roughness: 1 });
+  const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.9, vertexColors: true, flatShading: true });
   const rounds = list.filter((t) => t.kind === 0).length;
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, list.length);
-  const crownR = new THREE.InstancedMesh(roundGeo, leafMat, Math.max(1, rounds * 2));
+  const crownR = new THREE.InstancedMesh(roundGeo, leafMat, Math.max(1, rounds));
   const crownC = new THREE.InstancedMesh(coneGeo, leafMat, Math.max(1, list.length - rounds));
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
   const c = new THREE.Color();
   let ir = 0, ic = 0;
   list.forEach((t, i) => {
     const y = groundHeight(t.x, t.z);
-    const H = 4 * t.s;
+    const H = 3.6 * t.s;
     m.compose(v.set(t.x, y - 0.3, t.z), q.identity(), sc.set(t.s, H, t.s));
     trunks.setMatrixAt(i, m);
-    c.set(TREE_GREENS[Math.floor(r() * TREE_GREENS.length)]).offsetHSL(0, 0, (r() - 0.5) * 0.06);
+    c.set(TREE_GREENS[Math.floor(r() * TREE_GREENS.length)]).offsetHSL((r() - 0.5) * 0.03, 0, (r() - 0.5) * 0.08);
     q.setFromAxisAngle(v.set(0, 1, 0), r() * 6.28);
     if (t.kind === 0) {
-      const R = 3.4 * t.s;
-      m.compose(v.set(t.x, y + H + R * 0.55, t.z), q, sc.set(R, R * 0.9, R));
+      const R = 3.1 * t.s;
+      m.compose(v.set(t.x, y + H + R * 0.5, t.z), q, sc.set(R, R * (0.85 + r() * 0.3), R));
       crownR.setMatrixAt(ir, m); crownR.setColorAt(ir++, c);
-      m.compose(v.set(t.x + R * 0.35, y + H + R * 1.05, t.z - R * 0.2), q, sc.set(R * 0.7, R * 0.65, R * 0.7));
-      crownR.setMatrixAt(ir, m); crownR.setColorAt(ir++, c.offsetHSL(0, 0, 0.04));
     } else {
-      const R = 2.5 * t.s;
-      m.compose(v.set(t.x, y + H * 0.6, t.z), q, sc.set(R, R * 2.2, R));
-      crownC.setMatrixAt(ic, m); crownC.setColorAt(ic++, c.offsetHSL(0, 0.02, -0.05));
+      const R = 2.3 * t.s;
+      m.compose(v.set(t.x, y + H * 0.45, t.z), q, sc.set(R, R * 3.2, R));
+      crownC.setMatrixAt(ic, m); crownC.setColorAt(ic++, c.offsetHSL(0, 0.02, -0.06));
     }
   });
   crownR.count = ir; crownC.count = ic;

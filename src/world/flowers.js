@@ -95,7 +95,7 @@ export class FlowerField {
     const geos = makeGeometries();
     const mat = makeMaterial();
     const caps = { leaf: capacity, stem: capacity };
-    for (const k of Object.keys(HEAD)) caps[k] = capacity;
+    for (const k of Object.keys(HEAD)) caps[k] = k === 'spike' ? capacity * 4 : capacity;
     for (const [k, cap] of Object.entries(caps)) {
       const g = geos[k];
       for (const name of ['aDelay', 'aBase', 'aFresh']) g.setAttribute(name, new THREE.InstancedBufferAttribute(new Float32Array(cap), 1));
@@ -153,11 +153,21 @@ export class FlowerField {
           continue;
         }
         const leafCol = (silver ? SILVER_GREENS : LEAF_GREENS)[Math.floor(slot.r3 * 3.99) % 3];
-        push('leaf', slot.x, slot.y, slot.z, 0.34 * S, (0.2 + H * 0.35) * S, 0.34 * S, rot, 0, leafCol, slot, fresh);
+        const cushion = plant.form === 'spike' ? 1.5 : 1;
+        push('leaf', slot.x, slot.y, slot.z, 0.34 * S * cushion, (0.2 + H * 0.35) * S * cushion, 0.34 * S * cushion, rot, 0, leafCol, slot, fresh);
         const headY = slot.y + H * form.at;
         if (!form.noStem) push('stem', slot.x, slot.y, slot.z, 0.05, headY - slot.y, 0.05, rot, 0, LEAF_GREENS[1], slot, fresh);
         const hs = form.s * S * (0.85 + slot.r * 0.3);
-        push(plant.form, slot.x, headY, slot.z, hs, hs * (form.sy ?? 1) * (plant.form === 'spike' ? Math.max(1, H / 0.35) : 1), hs, rot, (slot.r2 - 0.5) * 0.5, c, slot, fresh);
+        if (plant.form === 'spike') {
+          // a cushion of flower spikes, like a lavender bush
+          const n = S > 1.1 ? 4 : 2;
+          for (let k = 0; k < n; k++) {
+            const a = rot + (k / n) * Math.PI * 2, d = 0.13 * S * (k ? 1 : 0.2);
+            push('spike', slot.x + Math.cos(a) * d, headY - k * 0.03 * S, slot.z + Math.sin(a) * d, hs * 0.8, hs * Math.max(1, H / 0.35) * (0.8 + 0.1 * k), hs * 0.8, a, (k ? 0.35 : 0.05), c, slot, fresh);
+          }
+          continue;
+        }
+        push(plant.form, slot.x, headY, slot.z, hs, hs * (form.sy ?? 1), hs, rot, (slot.r2 - 0.5) * 0.5, c, slot, fresh);
       }
     }
     for (const [k, mesh] of Object.entries(this.meshes)) {

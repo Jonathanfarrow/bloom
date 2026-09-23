@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Batch, col } from './batch.js';
 import { groundHeight, streetPath, riverPath, landByName, ROAD_WIDTH } from './geo.js';
 import { pointInPoly, polyBounds, rng } from './util.js';
+import { SILL } from './buildings.js';
 
 const SOIL = col('#4e3627');
 const MATERIALS = { stone: col('#cdc2ab'), timber: col('#8a5a3b'), green: col('#2f5a43'), trough: col('#3d584a') };
@@ -9,12 +10,17 @@ const MATERIALS = { stone: col('#cdc2ab'), timber: col('#8a5a3b'), green: col('#
 // Turns each site's shape list into (a) structures — soil, planters, posts —
 // and (b) flower "slots" that the FlowerField fills with plants.
 export function buildSites(sites, town) {
-  const batch = new Batch();
+  const fixtures = new Batch();   // lamp columns etc. that stay whichever option is chosen
+  const poleSeen = new Set();
   const out = [];
   const occ = town.occ;
+  const jobs = [];
+  sites.forEach((site, si) => site.options.forEach((option, oi) => jobs.push({ site, option, seed: 1000 + si * 77 + oi * 13 })));
 
-  sites.forEach((site, si) => {
-    const r = rng(1000 + si * 77);
+  jobs.forEach(({ site, option, seed }) => {
+    const si = seed;
+    const batch = new Batch();
+    const r = rng(seed);
     const slots = [];
     let area = 0, units = 0;
     const slot = (x, z, y, extra = {}) => slots.push({ x, z, y, r: r(), r2: r(), r3: r(), delay: 0.04 + r() * 0.56, band: -1, ...extra });
@@ -32,7 +38,7 @@ export function buildSites(sites, town) {
     };
     const within = (x, z, name) => { const l = name && landByName(name); return !l || pointInPoly(x, z, l.p); };
 
-    for (const sh of site.shapes) {
+    for (const sh of option.shapes) {
       switch (sh.kind) {
         case 'poly': {
           const h = sh.raised ?? 0.22;
@@ -107,7 +113,7 @@ export function buildSites(sites, town) {
         }
         case 'planter': {
           const y0 = groundHeight(sh.x, sh.z) + 0.05, m = MATERIALS[sh.material || 'stone'];
-          units++;
+          if (sh.counts !== false) units++;
           batch.cylinder(sh.r, sh.h, sh.x, y0, sh.z, m, 32, sh.r * 1.08);
           batch.cylinder(sh.r * 1.02, sh.h + 0.02, sh.x, y0, sh.z, SOIL, 32);
           area += Math.PI * sh.r * sh.r;
@@ -167,7 +173,7 @@ export function buildSites(sites, town) {
             if (floors < 2) continue;
             const ux = (e.B[0] - e.A[0]) / e.L, uz = (e.B[1] - e.A[1]) / e.L, a = Math.atan2(uz, ux);
             for (let k = 1; k < Math.min(floors, 4); k++) {
-              const sill = e.base + (k + 0.3) * 3.2;
+              const sill = e.base + (k + SILL) * 3.2;
               for (let d = 1.75; d + 0.8 < e.L; d += 3.5) {
                 const x = e.A[0] + ux * d + e.n[0] * 0.22, z = e.A[1] + uz * d + e.n[1] * 0.22;
                 batch.box(1.5, 0.3, 0.34, x, sill - 0.36, z, -a, MATERIALS.green);
@@ -191,10 +197,16 @@ export function buildSites(sites, town) {
               const x = p.x + p.nx * sh.offset * s, z = p.z + p.nz * sh.offset * s;
               if (occ.get(x, z) === 4) continue;
               const y0 = groundHeight(x, z);
-              batch.cylinder(0.09, 4.4, x, y0, z, pole, 8, 0.07);
-              batch.cylinder(0.22, 0.5, x, y0 + 4.4, z, pole, 6, 0.08);
               const bx = x - p.nx * s * 0.9, bz = z - p.nz * s * 0.9;
-              batch.box(0.07, 0.07, 1.0, (x + bx) / 2, y0 + 3.95, (z + bz) / 2, Math.atan2(p.nx, p.nz), pole);
+              const key = `${Math.round(x)},${Math.round(z)}`;
+              if (!poleSeen.has(key)) {
+                poleSeen.add(key);
+                fixtures.cylinder(0.18, 0.6, x, y0, z, pole, 8, 0.14);
+                fixtures.cylinder(0.08, 4.6, x, y0, z, pole, 8, 0.06);
+                fixtures.cylinder(0.17, 0.42, x, y0 + 4.6, z, col('#fff4d6'), 6, 0.12);
+                fixtures.cylinder(0.25, 0.22, x, y0 + 5.02, z, pole, 6, 0);
+                fixtures.box(0.06, 0.06, 1.0, (x + bx) / 2, y0 + 3.95, (z + bz) / 2, Math.atan2(p.nx, p.nz), pole);
+              }
               batch.box(0.03, 0.55, 0.03, bx, y0 + 3.4, bz, 0, pole);
               const cy = y0 + 3.05;
               batch.cylinder(0.32, 0.36, bx, cy - 0.3, bz, col('#5d4630'), 12, 0.42);
@@ -239,14 +251,22 @@ export function buildSites(sites, town) {
           });
           break;
         }
+        case 'meadowpoly': {
+          const b = polyBounds(sh.pts), dens = sh.density ?? 0.8;
+          grid(b, 0.6, (x, z) => {
+            if (r() > dens || !pointInPoly(x, z, sh.pts) || !within(x, z, sh.within)) return;
+            groundSlot(x, z, groundHeight(x, z) + 0.02, 0.36 / dens, { hm: 1.1 }, true);
+          });
+          break;
+        }
         case 'rows': {
           const b = polyBounds(sh.pts);
           let row = 0;
           for (let x = b.x0 + 1; x < b.x1; x += sh.spacing, row++) {
-            for (let z = b.z0; z < b.z1; z += 0.5) {
+            for (let z = b.z0; z < b.z1; z += 0.7) {
               const xx = x + (r() - 0.5) * 0.25, zz = z + (r() - 0.5) * 0.15;
               if (!pointInPoly(xx, zz, sh.pts) || !within(xx, zz, sh.within)) continue;
-              groundSlot(xx, zz, groundHeight(xx, zz), sh.spacing * 0.5, { band: row % 3, s: 1.3 }, true);
+              groundSlot(xx, zz, groundHeight(xx, zz), sh.spacing * 0.7, { band: row % 3, s: 1.6 }, true);
             }
           }
           break;
@@ -288,13 +308,17 @@ export function buildSites(sites, town) {
     cx /= slots.length || 1; cz /= slots.length || 1;
     let radius = 8;
     for (const s of slots) radius = Math.max(radius, Math.hypot(s.x - cx, s.z - cz));
-    out.push({ id: site.id, slots, area: Math.round(area), units, center: slots.length ? [cx, cz] : site.center, radius });
+    const mesh = new THREE.Mesh(batch.build(), MAT);
+    mesh.castShadow = mesh.receiveShadow = true;
+    out.push({ id: site.id, option: option.id, key: `${site.id}:${option.id}`, slots, mesh, area: Math.round(area), units, center: slots.length ? [cx, cz] : [0, 0], radius });
   });
 
-  const mesh = new THREE.Mesh(batch.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }));
-  mesh.castShadow = mesh.receiveShadow = true;
-  return { mesh, sites: out };
+  const fixturesMesh = new THREE.Mesh(fixtures.build(), MAT);
+  fixturesMesh.castShadow = fixturesMesh.receiveShadow = true;
+  return { fixtures: fixturesMesh, options: out };
 }
+
+const MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
 
 function footprintClear(occ, x, z, w, d, a) {
   const c = Math.cos(a), s = Math.sin(a);

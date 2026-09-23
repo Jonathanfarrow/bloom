@@ -28,20 +28,22 @@ const LAND = {
 
 const PATHS = new Set(['footway', 'path', 'cycleway', 'steps', 'bridleway', 'track']);
 
-function paintGround(pxPerM) {
-  const W = Math.round(HALF_W * 2 * pxPerM), H = Math.round(HALF_H * 2 * pxPerM);
+function paintGround(pxPerM, region = { x0: -HALF_W, z0: -HALF_H, x1: HALF_W, z1: HALF_H }) {
+  const W = Math.round((region.x1 - region.x0) * pxPerM), H = Math.round((region.z1 - region.z0) * pxPerM);
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
-  g.setTransform(pxPerM, 0, 0, pxPerM, HALF_W * pxPerM, HALF_H * pxPerM);
+  g.setTransform(pxPerM, 0, 0, pxPerM, -region.x0 * pxPerM, -region.z0 * pxPerM);
+  const fine = pxPerM > 2;
   const poly = (pts) => { g.beginPath(); pts.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); g.closePath(); };
   const line = (pts) => { g.beginPath(); pts.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); };
 
   // Grass base with a soft mottle
   g.fillStyle = '#8cb766';
   g.fillRect(-HALF_W, -HALF_H, HALF_W * 2, HALF_H * 2);
-  for (let i = 0; i < 9000; i++) {
-    const x = -HALF_W + Math.random() * HALF_W * 2, z = -HALF_H + Math.random() * HALF_H * 2;
+  const blobs = Math.round(((region.x1 - region.x0) * (region.z1 - region.z0)) / 660);
+  for (let i = 0; i < blobs; i++) {
+    const x = region.x0 + Math.random() * (region.x1 - region.x0), z = region.z0 + Math.random() * (region.z1 - region.z0);
     g.fillStyle = vnoise(x / 60, z / 60) > 0.5 ? 'rgba(170,190,100,0.10)' : 'rgba(70,120,50,0.10)';
     g.beginPath(); g.arc(x, z, 6 + Math.random() * 14, 0, Math.PI * 2); g.fill();
   }
@@ -93,6 +95,11 @@ function paintGround(pxPerM) {
     if (!MAJOR.has(s.c)) continue;
     line(s.p); g.strokeStyle = '#cfc8ba'; g.lineWidth = (ROAD_WIDTH[s.c] || 6) + 4.2; g.stroke();
   }
+  // kerb edge
+  for (const s of streets) {
+    if (!MAJOR.has(s.c) && s.c !== 'service') continue;
+    line(s.p); g.strokeStyle = '#a39c90'; g.lineWidth = (ROAD_WIDTH[s.c] || 5) + 0.45; g.stroke();
+  }
   const order = ['pedestrian', 'service', 'unknown', 'living_street', 'residential', 'unclassified', 'tertiary', 'secondary', 'primary', 'trunk'];
   for (const s of streets.slice().sort((a, b) => order.indexOf(a.c) - order.indexOf(b.c))) {
     line(s.p);
@@ -100,13 +107,28 @@ function paintGround(pxPerM) {
     g.lineWidth = ROAD_WIDTH[s.c] || 5;
     g.stroke();
   }
+  // York stone flag joints in the pedestrian areas (close-up texture only)
+  if (fine) {
+    const squares = DATA.land.filter((l) => l.c === 'pedestrian');
+    if (squares.length) {
+      g.save();
+      g.beginPath();
+      for (const l of squares) { l.p.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); g.closePath(); }
+      g.clip();
+      g.strokeStyle = 'rgba(110,95,70,0.3)'; g.lineWidth = 0.05;
+      for (let z = Math.floor(region.z0); z < region.z1; z += 0.9) { g.beginPath(); g.moveTo(region.x0, z); g.lineTo(region.x1, z); g.stroke(); }
+      for (let x = Math.floor(region.x0); x < region.x1; x += 1.3) { g.beginPath(); g.moveTo(x, region.z0); g.lineTo(x, region.z1); g.stroke(); }
+      g.restore();
+    }
+  }
   g.setLineDash([3, 4.5]); g.strokeStyle = 'rgba(245,242,232,0.85)'; g.lineWidth = 0.18;
   for (const s of streets) if (['primary', 'secondary', 'tertiary', 'trunk'].includes(s.c)) { line(s.p); g.stroke(); }
   g.setLineDash([]);
 
   // Soft footprint under every building so the wall bases look grounded
-  g.fillStyle = 'rgba(80,70,60,0.35)';
+  g.fillStyle = 'rgba(70,60,50,0.45)';
   for (const b of DATA.buildings) { poly(b.p); g.fill(); }
+  if (fine) { g.strokeStyle = 'rgba(40,30,25,0.35)'; g.lineWidth = 0.8; for (const b of DATA.buildings) { poly(b.p); g.stroke(); } }
 
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -129,6 +151,23 @@ export function buildGround(renderer) {
   ground.receiveShadow = true;
   ground.name = 'ground';
   group.add(ground);
+
+  // Sharper ground for the town centre, drawn just above the main ground
+  if (!small) {
+    const R = { x0: -520, z0: -560, x1: 560, z1: 520 };
+    const ctex = paintGround(3.2, R);
+    ctex.anisotropy = tex.anisotropy;
+    const cg = new THREE.PlaneGeometry(R.x1 - R.x0, R.z1 - R.z0, Math.round((R.x1 - R.x0) / 4), Math.round((R.z1 - R.z0) / 4));
+    cg.rotateX(-Math.PI / 2);
+    cg.translate((R.x0 + R.x1) / 2, 0, (R.z0 + R.z1) / 2);
+    const cp = cg.attributes.position;
+    for (let i = 0; i < cp.count; i++) cp.setY(i, groundHeight(cp.getX(i), cp.getZ(i)) + 0.03);
+    cg.computeVertexNormals();
+    const centre = new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ map: ctex, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    centre.receiveShadow = true;
+    centre.name = 'ground';
+    group.add(centre);
+  }
 
   // Patchwork countryside beyond the mapped area
   const outer = new THREE.PlaneGeometry(9000, 9000, 180, 180);

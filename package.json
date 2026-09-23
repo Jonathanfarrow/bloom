@@ -11,9 +11,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "n8ao": "^2.0.1",
     "three": "^0.169.0"
   },
   "devDependencies": {
+    "straight-skeleton": "^3.0.0",
     "vite": "^5.4.21",
     "vite-plugin-singlefile": "^2.3.3"
   }

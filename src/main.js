@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import './style.css';
-import { SITES, SCHEMES, SITE_TYPES, PLACE_LABELS } from './data/sites.js';
+import { SITES, SCHEMES, ROLES, LEVEL, PLACE_LABELS, costOf } from './data/sites.js';
 import { buildGround, buildBridges } from './world/ground.js';
 import { buildTown } from './world/buildings.js';
 import { buildTrees } from './world/trees.js';
+import { buildProps } from './world/props.js';
+import { createPost } from './post.js';
 import { buildSites } from './world/siteBuilder.js';
 import { FlowerField, flowerUniforms } from './world/flowers.js';
 import { groundHeight, streetNames, streetPath, MAJOR, HALF_W, HALF_H } from './world/geo.js';
@@ -26,11 +28,16 @@ const state = {
   labels: true,
   touring: false,
   suggesting: false,
-  schemes: store.get('hib-schemes-v1', {}),
+  view: 'site',
+  plan: store.get('hib-plan-v2', {}),
   ideas: store.get('hib-ideas-v1', []),
   pendingIdea: null,
 };
-const schemeOf = (id) => state.schemes[id] || SITES.find((s) => s.id === id)?.scheme || 'summer';
+const siteById = (id) => SITES.find((s) => s.id === id);
+const optionOf = (id) => { const s = siteById(id); return s.options.find((o) => o.id === state.plan[id]?.opt) || s.options[0]; };
+const inPlan = (id) => state.plan[id]?.on ?? true;
+const schemeOf = (id) => optionOf(id).scheme;
+const PLANT_KINDS = { bed: 'Flower bed', planters: 'Planters', baskets: 'Hanging baskets', windowboxes: 'Window boxes', meadow: 'Wildflowers or bulbs', other: 'Something else' };
 
 // ---------- Renderer, camera, controls ----------
 const host = $('#scene');
@@ -101,9 +108,9 @@ scene.add(sun, sun.target);
 scene.fog = new THREE.Fog('#d4e1e6', 1800, 5200);
 const sunDir = new THREE.Vector3();
 
-let town;
+let town, lampMat, post;
 const THEMES = {
-  day: { top: '#5f9bd6', horizon: '#dde9ee', bottom: '#b8c7a8', fog: '#d6e3e7', sun: '#fff0d8', sunI: 2.7, dir: [-0.55, 0.72, 0.42], hemiSky: '#d2e5ff', hemiGround: '#6d7f4f', hemiI: 1.15, glow: 0, exposure: 1.05 },
+  day: { top: '#79aedc', horizon: '#f2e7d4', bottom: '#cbc3a3', fog: '#e9e1cf', sun: '#ffe2ba', sunI: 3.2, dir: [-0.62, 0.52, 0.5], hemiSky: '#d6e4f5', hemiGround: '#b9a680', hemiI: 1.05, glow: 0, exposure: 1.0 },
   dusk: { top: '#1a2045', horizon: '#e08d68', bottom: '#2f2b2c', fog: '#6a5462', sun: '#ffab72', sunI: 1.6, dir: [-0.8, 0.3, 0.35], hemiSky: '#7480b5', hemiGround: '#3a352c', hemiI: 0.95, glow: 1.3, exposure: 1.0 },
 };
 function isDark() {
@@ -120,12 +127,15 @@ function applyTheme() {
   hemi.color.set(T.hemiSky); hemi.groundColor.set(T.hemiGround); hemi.intensity = T.hemiI;
   renderer.toneMappingExposure = T.exposure;
   if (town) for (const m of Object.values(town.wallMats)) m.emissiveIntensity = T.glow;
+  if (lampMat) lampMat.emissiveIntensity = T.glow * 2.2;
 }
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
 // ---------- Build the town ----------
-let field, siteInfo, ground;
+let field, ground;
+const optionInfo = new Map(); // "site:option" → { slots, mesh, area, units, center, radius }
+const info = (id) => optionInfo.get(`${id}:${optionOf(id).id}`);
 const pins = new Map();
 const streetLabels = [];
 
@@ -139,13 +149,17 @@ function build() {
   town.bridges = br.bridges;
   scene.add(br.mesh);
   const built = buildSites(SITES, town);
-  scene.add(built.mesh);
+  scene.add(built.fixtures);
+  for (const o of built.options) { optionInfo.set(o.key, o); scene.add(o.mesh); }
   scene.add(buildTrees(town.occ));
-  siteInfo = Object.fromEntries(built.sites.map((s) => [s.id, s]));
-  const capacity = built.sites.reduce((n, s) => n + s.slots.length, 0) + 16;
+  const props = buildProps(town.occ);
+  lampMat = props.lampMat;
+  scene.add(props.group);
+  post = createPost(renderer, scene, camera, host);
+  const capacity = SITES.reduce((n, s) => n + Math.max(...s.options.map((o) => optionInfo.get(`${s.id}:${o.id}`).slots.length)), 0) + 16;
   field = new FlowerField(capacity);
   scene.add(field.group);
-  field.rebuild(built.sites, schemeOf);
+  refreshPlanting();
 
   for (const site of SITES) {
     const el = document.createElement('button');
@@ -155,8 +169,9 @@ function build() {
     el.setAttribute('aria-label', site.name);
     el.addEventListener('click', (e) => { e.stopPropagation(); stopTour(); select(site.id); });
     const obj = new CSS2DObject(el);
-    const [x, z] = siteInfo[site.id].center;
-    obj.position.set(x, groundHeight(x, z) + (site.type === 'windowboxes' || site.type === 'baskets' ? 12 : 7), z);
+    const [x, z] = optionInfo.get(`${site.id}:${site.options[0].id}`).center;
+    const high = site.options[0].shapes.some((sh) => sh.kind === 'baskets' || sh.kind === 'windowboxes');
+    obj.position.set(x, groundHeight(x, z) + (high ? 12 : 7), z);
     scene.add(obj);
     pins.set(site.id, { el, obj });
   }
@@ -172,6 +187,20 @@ function build() {
   for (const p of PLACE_LABELS) addLabel('place-label', p.text, p.at[0], p.at[1], 10);
   state.ideas.forEach(addIdeaPin);
   applyTheme();
+}
+
+// Show the chosen option at every site in the plan, and nothing at sites left out
+function refreshPlanting(freshId) {
+  const active = [];
+  for (const site of SITES) {
+    for (const o of site.options) optionInfo.get(`${site.id}:${o.id}`).mesh.visible = false;
+    if (!inPlan(site.id)) continue;
+    const i = info(site.id);
+    i.mesh.visible = true;
+    active.push({ id: site.id, slots: i.slots });
+  }
+  field.rebuild(active, schemeOf, freshId);
+  for (const [id, p] of pins) p.el.classList.toggle('dim', !inPlan(id) || (state.filter !== 'all' && siteById(id).role !== state.filter));
 }
 
 function addLabel(cls, text, x, z, lift, length = 0) {
@@ -205,7 +234,7 @@ function flyTo(target, dist, phi) {
   tweens[tweens.length - 1].camera = true;
 }
 function flyToSite(site) {
-  const { center: [x, z], radius } = siteInfo[site.id];
+  const { center: [x, z], radius } = info(site.id);
   const dist = Math.min(450, Math.max(75, radius * 2.8));
   flyTo(new THREE.Vector3(x, groundHeight(x, z), z), dist, radius > 60 ? 0.85 : 1.0);
 }
@@ -217,74 +246,153 @@ function setBloom(on) {
   tween(on ? 2.6 : 1.2, (k) => { flowerUniforms.uBloom.value = from + (to - from) * k; });
 }
 
+// ---------- Money ----------
+const roundMoney = (n) => (n < 1000 ? Math.round(n / 10) * 10 : n < 10000 ? Math.round(n / 50) * 50 : Math.round(n / 100) * 100);
+const gbp = (n) => '£' + roundMoney(n).toLocaleString('en-GB');
+const range = ([lo, hi]) => (roundMoney(lo) === roundMoney(hi) ? gbp(lo) : `${gbp(lo)}–${gbp(hi)}`);
+const short = (n) => (n >= 1000 ? `£${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : gbp(n));
+const siteCost = (id, opt = optionOf(id)) => costOf(opt, optionInfo.get(`${id}:${opt.id}`));
+function planTotals() {
+  const t = { capital: [0, 0], annual: [0, 0], count: 0 };
+  for (const s of SITES) {
+    if (!inPlan(s.id)) continue;
+    const c = siteCost(s.id);
+    t.capital[0] += c.capitalTotal[0]; t.capital[1] += c.capitalTotal[1];
+    t.annual[0] += c.annualTotal[0]; t.annual[1] += c.annualTotal[1];
+    t.count++;
+  }
+  return t;
+}
+function savePlan() { store.set('hib-plan-v2', state.plan); }
+
 // ---------- UI: catalogue ----------
 function renderFilters() {
-  const types = ['all', ...new Set(SITES.map((s) => s.type))];
-  $('#filters').innerHTML = types.map((t) => `<button class="chip" data-type="${t}" aria-pressed="${state.filter === t}">${t === 'all' ? 'All sites' : SITE_TYPES[t]}</button>`).join('');
+  const roles = ['all', ...Object.keys(ROLES)];
+  $('#filters').innerHTML = roles.map((t) => `<button class="chip" data-type="${t}" aria-pressed="${state.filter === t}">${t === 'all' ? 'All sites' : ROLES[t]}</button>`).join('');
 }
-function visibleSites() { return SITES.filter((s) => state.filter === 'all' || s.type === state.filter); }
+function visibleSites() { return SITES.filter((s) => state.filter === 'all' || s.role === state.filter); }
 function renderList() {
   $('#site-list').innerHTML = visibleSites().map((s) => {
-    const cols = SCHEMES[schemeOf(s.id)].plants.slice(0, 4).map((p) => `<i style="background:${p.color}"></i>`).join('');
-    return `<li class="site-item"><button data-id="${s.id}" aria-current="${state.selected === s.id}">
-      <span class="site-name">${s.name}</span><span class="swatches" aria-hidden="true">${cols}</span>
-      <span class="site-meta">${SITE_TYPES[s.type]} · ${SCHEMES[schemeOf(s.id)].name}</span></button></li>`;
+    const o = optionOf(s.id), c = siteCost(s.id);
+    const cols = SCHEMES[o.scheme].plants.slice(0, 4).map((p) => `<i style="background:${p.color}"></i>`).join('');
+    return `<li class="site-item${inPlan(s.id) ? '' : ' out'}">
+      <button data-id="${s.id}" aria-current="${state.selected === s.id && state.view === 'site'}">
+        <span class="site-name">${s.name}</span><span class="swatches" aria-hidden="true">${cols}</span>
+        <span class="site-meta">${ROLES[s.role]} · ${o.name}${inPlan(s.id) ? ` · <span class="money">${short(c.capitalTotal[1])}</span>` : ' · not in plan'}</span>
+      </button>
+      <input type="checkbox" class="plan-check" id="plan-${s.id}" data-plan="${s.id}" ${inPlan(s.id) ? 'checked' : ''} aria-label="Include ${s.name} in the plan" title="Include in the plan" />
+    </li>`;
   }).join('');
-  for (const [id, p] of pins) p.el.classList.toggle('dim', state.filter !== 'all' && SITES.find((s) => s.id === id).type !== state.filter);
+  renderPlanBar();
+}
+function renderPlanBar() {
+  const t = planTotals();
+  $('#plan-bar').innerHTML = `<div><span class="pb-label">Your plan · ${t.count} sites</span>
+    <span class="pb-figs"><b>${short(t.capital[0])}–${short(t.capital[1])}</b> set-up · <b>${short(t.annual[0])}–${short(t.annual[1])}</b> a year</span></div>
+    <button class="primary small" id="open-plan">Plan &amp; costs</button>`;
 }
 $('#filters').addEventListener('click', (e) => {
   const b = e.target.closest('.chip'); if (!b) return;
-  state.filter = b.dataset.type; renderFilters(); renderList();
+  state.filter = b.dataset.type; renderFilters(); renderList(); refreshPins();
 });
+function refreshPins() {
+  for (const [id, p] of pins) p.el.classList.toggle('dim', !inPlan(id) || (state.filter !== 'all' && siteById(id).role !== state.filter));
+}
 $('#site-list').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-id]'); if (!b) return;
   stopTour(); select(b.dataset.id);
   if (window.innerWidth <= 760) toggleList(false);
 });
+$('#site-list').addEventListener('change', (e) => {
+  const c = e.target.closest('[data-plan]'); if (!c) return;
+  setInPlan(c.dataset.plan, c.checked);
+});
+$('#catalogue').addEventListener('click', (e) => { if (e.target.closest('#open-plan')) { stopTour(); openPlan(); } });
 function toggleList(open) {
   $('#catalogue').classList.toggle('open', open);
   $('#toggle-list').setAttribute('aria-expanded', String(open));
 }
 $('#toggle-list').addEventListener('click', () => toggleList(!$('#catalogue').classList.contains('open')));
 
-// ---------- UI: detail ----------
-const round = (n) => (n > 1000 ? Math.round(n / 100) * 100 : n > 100 ? Math.round(n / 10) * 10 : Math.round(n));
-const fmt = (n) => n.toLocaleString('en-GB');
-const CONTAINER_TYPES = new Set(['windowboxes', 'baskets', 'troughs', 'planters']);
+function setInPlan(id, on) {
+  state.plan[id] = { ...(state.plan[id] || {}), on };
+  savePlan();
+  refreshPlanting(id);
+  flowerUniforms.uRegrow.value = 0;
+  tween(1.6, (k) => { flowerUniforms.uRegrow.value = k; });
+  renderList();
+  if (state.view === 'plan') renderPlan(); else renderDetail();
+}
+function setOption(id, optId) {
+  state.plan[id] = { ...(state.plan[id] || {}), opt: optId, on: true };
+  savePlan();
+  refreshPlanting(id);
+  flowerUniforms.uRegrow.value = 0;
+  tween(1.8, (k) => { flowerUniforms.uRegrow.value = k; });
+  if (!state.bloom) setBloom(true);
+  renderDetail(); renderList();
+}
+
+// ---------- UI: site detail ----------
+const fmt = (n) => Math.round(n).toLocaleString('en-GB');
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const levelTag = (label, v, good) => `<span class="lvl lvl-${good ? v : 2 - v}">${label}: ${LEVEL[v]}</span>`;
 
 function renderDetail() {
-  const site = SITES.find((s) => s.id === state.selected);
+  const site = siteById(state.selected);
   const box = $('#detail');
   if (!site) { box.hidden = true; app.classList.remove('has-detail'); return; }
-  const key = schemeOf(site.id), scheme = SCHEMES[key], info = siteInfo[site.id];
+  state.view = 'site';
+  const opt = optionOf(site.id), scheme = SCHEMES[opt.scheme], i = info(site.id), c = siteCost(site.id);
   const list = visibleSites().length ? visibleSites() : SITES;
   const idx = Math.max(0, list.findIndex((s) => s.id === site.id));
   const prev = list[(idx - 1 + list.length) % list.length], next = list[(idx + 1) % list.length];
-  const factor = site.type === 'meadow' ? 0.3 : 1;
-  const plants = round(info.area * scheme.perM2 * factor);
-  const bulbs = key === 'spring';
+  const plants = scheme.perM2 ? Math.round((i.area * scheme.perM2) / 10) * 10 : 0;
+  const costRows = (lines) => lines.map((l) => `<tr><td>${l.label}${l.kind === 'area' ? ` <em>${fmt(l.qty)} m² × £${l.per[0]}–${l.per[1]}</em>` : l.kind === 'units' ? ` <em>${fmt(l.qty)} × £${l.per[0]}–${l.per[1]}</em>` : ''}</td><td class="h">${range([l.lo, l.hi])}</td></tr>`).join('');
   $('#detail-body').innerHTML = `
-    <span class="type-tag">${SITE_TYPES[site.type]} <b>· ${site.street}</b></span>
+    <span class="type-tag">${ROLES[site.role]} <b>· ${site.street}</b></span>
     <h2>${site.name}</h2>
-    <p class="blurb">${site.blurb}</p>
-    <h3 class="section-label" style="margin:14px 0 4px">Planting scheme</h3>
-    <div class="schemes" role="group" aria-label="Planting scheme">
-      ${Object.entries(SCHEMES).map(([k, s]) => `<button class="scheme" data-scheme="${k}" aria-pressed="${k === key}">
-        <span class="dots" aria-hidden="true">${s.plants.slice(0, 3).map((p) => `<i style="background:${p.color}"></i>`).join('')}</span>${s.name}</button>`).join('')}
+    <p class="blurb">${site.headline}</p>
+    <label class="inplan" for="inplan"><input type="checkbox" id="inplan" ${inPlan(site.id) ? 'checked' : ''} /> Include in the plan</label>
+    <h3 class="section-label">${site.options.length > 1 ? 'Options' : 'Proposal'}</h3>
+    <div class="options" role="group" aria-label="Options for ${esc(site.name)}">
+      ${site.options.map((o, k) => {
+        const oc = siteCost(site.id, o);
+        return `<button class="option" data-opt="${o.id}" aria-pressed="${o.id === opt.id}">
+          <span class="opt-head"><span class="opt-letter">${site.options.length > 1 ? `Option ${'ABC'[k]}` : 'Proposal'}</span>${k === 0 && site.options.length > 1 ? '<span class="rec">Recommended</span>' : ''}</span>
+          <span class="opt-name"><span class="dots" aria-hidden="true">${SCHEMES[o.scheme].plants.slice(0, 3).map((p) => `<i style="background:${p.color}"></i>`).join('')}</span>${o.name}</span>
+          <span class="opt-cost"><b>${range(oc.capitalTotal)}</b> set-up · <b>${range(oc.annualTotal)}</b> a year</span>
+          <span class="opt-tags">${levelTag('Upkeep', o.maintenance, false)}${levelTag('Impact', o.impact, true)}${levelTag('Wildlife', o.wildlife, true)}</span>
+        </button>`;
+      }).join('')}
     </div>
-    <p class="scheme-note"><strong>${scheme.season}.</strong> ${scheme.note}</p>
+    <p class="opt-summary">${opt.summary}</p>
+    <details class="costs"><summary>Cost breakdown</summary>
+      <table class="cost-table">
+        <tbody><tr class="grp"><th colspan="2">Set-up</th></tr>${costRows(c.capital)}
+        <tr class="tot"><td>Set-up total</td><td class="h">${range(c.capitalTotal)}</td></tr>
+        <tr class="grp"><th colspan="2">Each year</th></tr>${c.annual.length ? costRows(c.annual) : '<tr><td>No running costs: volunteers and existing mowing</td><td class="h">£0</td></tr>'}
+        <tr class="tot"><td>Yearly total</td><td class="h">${range(c.annualTotal)}</td></tr></tbody>
+      </table>
+      <p class="fine">Indicative UK prices for budgeting. Get quotes before bidding.</p>
+    </details>
+    <h3 class="section-label">Planting · ${scheme.season}</h3>
+    <p class="scheme-note">${scheme.note}</p>
     <table class="plants"><tbody>
       ${scheme.plants.map((p) => `<tr><td><span class="sw" style="background:${p.color}"></span></td>
         <td>${p.name}<em>${p.latin}</em></td><td class="h">${Math.round(p.share * 100)}% · ${Math.round(p.h * 100)} cm</td></tr>`).join('')}
     </tbody></table>
     <dl class="facts">
-      <div><dt>Planted area</dt><dd class="num">≈ ${fmt(info.area)} m²</dd></div>
-      ${CONTAINER_TYPES.has(site.type) && info.units ? `<div><dt>Containers</dt><dd class="num">${fmt(info.units)}</dd></div>` : ''}
-      <div><dt>${bulbs ? 'Bulbs' : 'Plants'} (approx.)</dt><dd class="num">${fmt(plants)}</dd></div>
-      <div><dt>Care</dt><dd>${site.care}</dd></div>
-      <div><dt>Watering</dt><dd>${site.water}</dd></div>
+      <div><dt>Planted area</dt><dd class="num">≈ ${fmt(i.area)} m²</dd></div>
+      ${i.units ? `<div><dt>Containers</dt><dd class="num">${fmt(i.units)}</dd></div>` : ''}
+      ${plants ? `<div><dt>${opt.scheme === 'bulbs' || opt.scheme === 'spring' ? 'Bulbs' : 'Plants'} (approx.)</dt><dd class="num">${fmt(plants)}</dd></div>` : ''}
     </dl>
-    <div class="why"><h3 class="section-label" style="margin:0">Why here</h3><p>${site.why}</p></div>
+    <div class="why"><h3 class="section-label">Why this site</h3><ul>${site.why.map((w) => `<li>${w}</li>`).join('')}</ul></div>
+    <div class="why"><h3 class="section-label">Before going ahead</h3>
+      <p class="owner"><b>Land:</b> ${site.owner}</p>
+      <ul class="checks">${site.checks.map((w) => `<li>${w}</li>`).join('')}</ul>
+      <p class="owner"><b>Partners:</b> ${site.partners.join(' · ')}</p>
+    </div>
     <div class="pager">
       <button data-go="${prev.id}" title="${prev.name}">← Previous</button>
       <button data-go="${next.id}" title="${next.name}">Next site →</button>
@@ -293,29 +401,103 @@ function renderDetail() {
   app.classList.add('has-detail');
 }
 $('#detail-body').addEventListener('click', (e) => {
-  const sb = e.target.closest('[data-scheme]');
-  if (sb && state.selected) return setScheme(state.selected, sb.dataset.scheme);
+  const ob = e.target.closest('[data-opt]');
+  if (ob && state.selected) return setOption(state.selected, ob.dataset.opt);
   const go = e.target.closest('[data-go]');
-  if (go) { stopTour(); select(go.dataset.go); }
+  if (go) { stopTour(); select(go.dataset.go); return; }
+  const row = e.target.closest('[data-site]');
+  if (row) { stopTour(); select(row.dataset.site); return; }
+  if (e.target.closest('#copy-plan')) copyPlan();
 });
-$('#close-detail').addEventListener('click', () => { stopTour(); select(null); cancelSuggest(); });
+$('#detail-body').addEventListener('change', (e) => {
+  if (e.target.id === 'inplan' && state.selected) setInPlan(state.selected, e.target.checked);
+});
+$('#close-detail').addEventListener('click', () => { stopTour(); state.view = 'site'; select(null); cancelSuggest(); });
 
-function setScheme(id, key) {
-  state.schemes[id] = key;
-  store.set('hib-schemes-v1', state.schemes);
-  field.rebuild(Object.values(siteInfo), schemeOf, id);
-  flowerUniforms.uRegrow.value = 0;
-  tween(1.8, (k) => { flowerUniforms.uRegrow.value = k; });
-  if (!state.bloom) setBloom(true);
-  renderDetail(); renderList();
+// ---------- UI: plan summary ----------
+function openPlan() {
+  state.selected = null;
+  for (const p of pins.values()) p.el.classList.remove('selected');
+  renderPlan();
+  renderList();
+  flyTo(HOME.target.clone(), HOME.dist, HOME.phi);
+}
+function renderPlan() {
+  state.view = 'plan';
+  const t = planTotals();
+  const cont = [t.capital[0] * 0.1, t.capital[1] * 0.1];
+  const rows = SITES.filter((s) => inPlan(s.id)).map((s) => {
+    const c = siteCost(s.id), o = optionOf(s.id);
+    return `<tr data-site="${s.id}"><td><b>${s.name}</b><em>${ROLES[s.role]} · ${o.name}</em></td><td class="h">${range(c.capitalTotal)}</td><td class="h">${range(c.annualTotal)}</td></tr>`;
+  }).join('');
+  const left = SITES.filter((s) => !inPlan(s.id));
+  $('#detail-body').innerHTML = `
+    <span class="type-tag">Planting plan</span>
+    <h2>Proposed planting for Hitchin</h2>
+    <div class="tiles">
+      <div class="tile"><span>Set-up</span><b>${short(t.capital[0] + cont[0])}–${short(t.capital[1] + cont[1])}</b><em>incl. 10% contingency</em></div>
+      <div class="tile"><span>Each year</span><b>${short(t.annual[0])}–${short(t.annual[1])}</b><em>planting, watering, upkeep</em></div>
+      <div class="tile"><span>Sites</span><b>${t.count}</b><em>of ${SITES.length} proposed</em></div>
+    </div>
+    <table class="plan-table">
+      <thead><tr><th>Site and option</th><th class="h">Set-up</th><th class="h">Per year</th></tr></thead>
+      <tbody>${rows}
+        <tr class="tot"><td>Contingency (10% of set-up)</td><td class="h">${range(cont)}</td><td></td></tr>
+        <tr class="tot"><td>Total</td><td class="h">${range([t.capital[0] + cont[0], t.capital[1] + cont[1]])}</td><td class="h">${range(t.annual)}</td></tr>
+      </tbody>
+    </table>
+    ${left.length ? `<p class="fine">Not included: ${left.map((s) => s.name).join(', ')}. Tick them in the list to add them.</p>` : ''}
+    <p class="fine">Ranges use indicative UK prices and quantities measured from the model. Ownership and permissions are to be confirmed site by site. Sponsorship (baskets, roundabout, planters) and volunteer planting days can reduce the council's share.</p>
+    <div class="row"><button class="primary" id="copy-plan">Copy plan for the council paper</button></div>
+    <textarea id="plan-text" class="plan-text" rows="8" hidden aria-label="Plan text"></textarea>`;
+  $('#detail').hidden = false;
+  app.classList.add('has-detail');
+}
+function planText() {
+  const t = planTotals();
+  const cont = [t.capital[0] * 0.1, t.capital[1] * 0.1];
+  const lines = [
+    'HITCHIN IN BLOOM: PROPOSED PLANTING PLAN',
+    '',
+    `${t.count} sites. Set-up ${range([t.capital[0] + cont[0], t.capital[1] + cont[1]])} (including 10% contingency); running costs ${range(t.annual)} a year.`,
+    'Figures are indicative ranges for budgeting, based on typical UK prices and quantities measured from a 3D model of the town. Quotes to follow.',
+    '',
+  ];
+  for (const role of Object.keys(ROLES)) {
+    const sites = SITES.filter((s) => s.role === role && inPlan(s.id));
+    if (!sites.length) continue;
+    lines.push(ROLES[role].toUpperCase());
+    for (const s of sites) {
+      const o = optionOf(s.id), c = siteCost(s.id), i = info(s.id);
+      lines.push(`\n${s.name} (${s.street})`);
+      lines.push(`Proposal: ${o.name}. ${o.summary}`);
+      lines.push(`Why: ${s.why.join(' ')}`);
+      lines.push(`Size: about ${fmt(i.area)} m²${i.units ? `, ${fmt(i.units)} containers` : ''}. Upkeep ${LEVEL[o.maintenance].toLowerCase()}, impact ${LEVEL[o.impact].toLowerCase()}, wildlife value ${LEVEL[o.wildlife].toLowerCase()}.`);
+      lines.push(`Cost: ${range(c.capitalTotal)} set-up, ${range(c.annualTotal)} a year.`);
+      lines.push(`Land: ${s.owner}. To confirm: ${s.checks.join(' ')}`);
+      lines.push(`Partners: ${s.partners.join(', ')}.`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+async function copyPlan() {
+  const text = planText();
+  try { await navigator.clipboard.writeText(text); hint('Plan copied. Paste it into your council paper.'); }
+  catch {
+    const ta = $('#plan-text');
+    ta.hidden = false; ta.value = text; ta.focus(); ta.select();
+    hint('Select the text below and copy it');
+  }
 }
 
 function select(id, { fly = true } = {}) {
   state.selected = id;
+  if (id) state.view = 'site';
   cancelSuggest(false);
   for (const [pid, p] of pins) p.el.classList.toggle('selected', pid === id);
   renderList(); renderDetail();
-  const site = SITES.find((s) => s.id === id);
+  const site = siteById(id);
   if (site && fly) flyToSite(site);
   try { history.replaceState(null, '', id ? `#${id}` : location.pathname + location.search); } catch { /* sandboxed */ }
 }
@@ -326,7 +508,8 @@ function startTour() {
   state.touring = true;
   $('#tour-btn').setAttribute('aria-pressed', 'true');
   $('#tour-btn .tool-label').textContent = 'Stop tour';
-  const list = visibleSites();
+  const list = visibleSites().filter((s) => inPlan(s.id));
+  if (!list.length) return stopTour();
   let i = Math.max(-1, list.findIndex((s) => s.id === state.selected));
   const step = () => {
     i = (i + 1) % list.length;
@@ -407,7 +590,7 @@ function openIdeaForm(x, z) {
     <form class="form" id="idea-form">
       <label for="idea-name">Name this spot<input id="idea-name" required maxlength="80" placeholder="e.g. Bench by the bus stop" /></label>
       <label for="idea-type">What kind of planting?
-        <select id="idea-type">${Object.entries(SITE_TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+        <select id="idea-type">${Object.entries(PLANT_KINDS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
       <label for="idea-scheme">Scheme
         <select id="idea-scheme">${Object.entries(SCHEMES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select></label>
       <label for="idea-notes">Notes<textarea id="idea-notes" maxlength="400" placeholder="Who might look after it? Any sponsor?"></textarea></label>
@@ -448,11 +631,11 @@ function addIdeaPin(idea) {
 }
 function renderIdeas() {
   $('#ideas').hidden = !state.ideas.length;
-  $('#idea-list').innerHTML = state.ideas.map((i) => `<li><span>${escapeHtml(i.name)} <small>${SITE_TYPES[i.type]}, near ${escapeHtml(i.near)}</small></span></li>`).join('');
+  $('#idea-list').innerHTML = state.ideas.map((i) => `<li><span>${escapeHtml(i.name)} <small>${PLANT_KINDS[i.type] || ''}, near ${escapeHtml(i.near)}</small></span></li>`).join('');
 }
 $('#copy-ideas').addEventListener('click', async () => {
   const text = 'Hitchin in Bloom: suggested spots\n\n' + state.ideas.map((i) =>
-    `• ${i.name} (${SITE_TYPES[i.type]}, ${SCHEMES[i.scheme].name}), near ${i.near}${i.notes ? `\n  ${i.notes}` : ''}`).join('\n');
+    `• ${i.name} (${PLANT_KINDS[i.type] || ''}, ${SCHEMES[i.scheme]?.name || ''}), near ${i.near}${i.notes ? `\n  ${i.notes}` : ''}`).join('\n');
   try { await navigator.clipboard.writeText(text); hint('Copied to clipboard'); }
   catch {
     const ta = document.createElement('textarea');
@@ -478,7 +661,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (state.suggesting) return openIdeaForm(x, z);
   let best = null, bd = Infinity;
   for (const s of SITES) {
-    const { center, radius } = siteInfo[s.id];
+    const { center, radius } = info(s.id);
     const d = Math.hypot(center[0] - x, center[1] - z);
     if (d < Math.max(14, radius * 0.7) && d < bd) { bd = d; best = s; }
   }
@@ -548,7 +731,8 @@ function frame() {
     else l.el.style.opacity = o.toFixed(2);
   }
   updateViewOffset();
-  renderer.render(scene, camera);
+  if (post) post.render(camDist, viewShift.y / host.clientHeight, dt);
+  else renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
@@ -557,6 +741,7 @@ window.addEventListener('resize', () => {
   const w = host.clientWidth, h = host.clientHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
+  post?.setSize(w, h);
 });
 
 // ---------- Boot ----------
@@ -565,7 +750,10 @@ requestAnimationFrame(() => setTimeout(() => {
   renderFilters(); renderList(); renderIdeas();
   const fromHash = location.hash.slice(1);
   if (SITES.some((s) => s.id === fromHash)) select(fromHash);
-  else hint('Tap a purple pin, or pick a site from the list', 6000);
+  else {
+    if (window.innerWidth > 760) renderPlan();
+    hint('Tap a purple pin, or pick a site from the list', 6000);
+  }
   $('#loading').classList.add('done');
   frame();
 }, 30));

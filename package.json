@@ -1,0 +1,20 @@
+{
+  "name": "hitchin-in-bloom",
+  "private": true,
+  "version": "0.1.0",
+  "description": "An interactive 3D model of Hitchin town centre showing potential sites for flower beds, planters, window boxes and hanging baskets.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.21",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

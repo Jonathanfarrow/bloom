@@ -322,7 +322,8 @@ h1 span { color: var(--accent); }
 .labels-on .pin.near .name, .pin:hover .name, .pin:focus-visible .name, .pin.selected .name { opacity: 1; transform: none; }
 .pin.selected .dot { transform: scale(1.35); background: var(--ink); }
 .pin.idea .dot { background: var(--poppy); }
-.pin.dim { opacity: .35; }
+.pin.dim { opacity: .55; }
+.pin.dim .dot { background: var(--panel-solid); color: var(--muted); box-shadow: 0 0 0 2px var(--muted), 0 2px 6px rgba(0,0,0,.2); }
 .street-label, .place-label {
   pointer-events: none; white-space: nowrap; color: var(--ink);
   text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo), 0 0 10px var(--halo);
@@ -478,3 +479,7 @@ details.costs summary { cursor: pointer; font-weight: 600; font-size: 14px; colo
 .switches { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .switches .seg { margin: 0; }
 .seg button { font-size: 12.5px; padding: 5px 10px; }
+
+.list-head { font: 600 11px/1.2 var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: 14px 10px 6px; }
+.list-head small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }

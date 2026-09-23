@@ -29,7 +29,7 @@ const state = {
   touring: false,
   suggesting: false,
   view: 'site',
-  plan: store.get('hib-plan-v2', {}),
+  plan: store.get('hib-plan-v3', {}),
   model: 'volunteer', // volunteer-led programme; only specialist work is paid
   sourcing: store.get('hib-sourcing-v1', 'mixed'),
   ideas: store.get('hib-ideas-v1', []),
@@ -37,7 +37,7 @@ const state = {
 };
 const siteById = (id) => SITES.find((s) => s.id === id);
 const optionOf = (id) => { const s = siteById(id); return s.options.find((o) => o.id === state.plan[id]?.opt) || s.options[0]; };
-const inPlan = (id) => state.plan[id]?.on ?? true;
+const inPlan = (id) => state.plan[id]?.on ?? !siteById(id).future;
 const schemeOf = (id) => optionOf(id).scheme;
 const PLANT_KINDS = { bed: 'Flower bed', planters: 'Planters', baskets: 'Hanging baskets', windowboxes: 'Window boxes', meadow: 'Wildflowers or bulbs', other: 'Something else' };
 
@@ -187,6 +187,7 @@ function build() {
     addLabel('street-label', name, mid.x, mid.z, 1.5, path.length);
   }
   for (const p of PLACE_LABELS) addLabel('place-label', p.text, p.at[0], p.at[1], 10);
+  refreshPins();
   state.ideas.forEach(addIdeaPin);
   applyTheme();
 }
@@ -284,7 +285,7 @@ function planTotals() {
   t.volunteers = Math.ceil(t.yearHours / 60);
   return t;
 }
-function savePlan() { store.set('hib-plan-v2', state.plan); }
+function savePlan() { store.set('hib-plan-v3', state.plan); }
 function setSourcing(v) {
   state.sourcing = v;
   store.set('hib-sourcing-v1', v);
@@ -312,17 +313,21 @@ function renderFilters() {
 }
 function visibleSites() { return orderedSites().filter((s) => state.filter === 'all' || s.role === state.filter); }
 function renderList() {
-  $('#site-list').innerHTML = visibleSites().map((s) => {
+  const item = (s) => {
     const o = optionOf(s.id), c = siteCost(s.id);
     const cols = SCHEMES[o.scheme].plants.slice(0, 4).map((p) => `<i style="background:${p.color}"></i>`).join('');
     return `<li class="site-item${inPlan(s.id) ? '' : ' out'}">
       <button data-id="${s.id}" aria-current="${state.selected === s.id && state.view === 'site'}">
         <span class="site-name"><span class="stop" title="Stop ${routeNo(s.id)} on the judges' route">${routeNo(s.id)}</span>${s.name}</span><span class="swatches" aria-hidden="true">${cols}</span>
-        <span class="site-meta">${ROLES[s.role]} · ${o.name}${inPlan(s.id) ? ` · <span class="money">${short(c.capitalTotal[1])}</span>` : ' · not in plan'}</span>
+        <span class="site-meta">${s.future ? 'Future site' : ROLES[s.role]} · ${o.name}${inPlan(s.id) ? ` · <span class="money">${short(c.capitalTotal[1])}</span>` : ''}</span>
       </button>
       <input type="checkbox" class="plan-check" id="plan-${s.id}" data-plan="${s.id}" ${inPlan(s.id) ? 'checked' : ''} aria-label="Include ${s.name} in the plan" title="Include in the plan" />
     </li>`;
-  }).join('');
+  };
+  const list = visibleSites();
+  const now = list.filter((s) => !s.future), later = list.filter((s) => s.future);
+  $('#site-list').innerHTML = (now.length ? `<li class="list-head">Phase 1 · volunteer-led</li>${now.map(item).join('')}` : '')
+    + (later.length ? `<li class="list-head">Future sites <small>tick to add</small></li>${later.map(item).join('')}` : '');
   renderPlanBar();
 }
 function renderPlanBar() {
@@ -395,11 +400,11 @@ function renderDetail() {
   const idx = Math.max(0, list.findIndex((s) => s.id === site.id));
   const prev = list[(idx - 1 + list.length) % list.length], next = list[(idx + 1) % list.length];
   const plants = scheme.perM2 ? Math.round((i.area * scheme.perM2) / 10) * 10 : 0;
-  const qty = (l) => ({ area: `${fmt(l.qty)} m²`, gravel: `${fmt(l.qty)} m²`, hedge: `${fmt(l.qty)} m`, units: `${fmt(l.qty)} ×`, arches: `${fmt(l.qty)} ×`, topiary: `${fmt(l.qty)} ×`, benches: `${fmt(l.qty)} ×` })[l.kind] || '';
+  const qty = (l) => ({ area: `${fmt(l.qty)} m²`, gravel: `${fmt(l.qty)} m²`, edging: `${fmt(l.qty)} m`, units: `${fmt(l.qty)} ×`, benches: `${fmt(l.qty)} ×` })[l.kind] || '';
   const costRows = (lines) => lines.map((l) => `<tr><td>${l.label}<em>${qty(l)}${l.byVolunteers ? `${qty(l) ? ' · ' : ''}volunteers: about ${hrs(l.hours)} hours, materials only` : l.paidLabour ? `${qty(l) ? ' · ' : ''}paid work` : ''}</em></td><td class="h">${range([l.lo, l.hi])}</td></tr>`).join('');
   const pl = pillarLevels(site.id);
   $('#detail-body').innerHTML = `
-    <span class="type-tag">Stop ${routeNo(site.id)} · ${ROLES[site.role]} <b>· ${site.street}</b></span>
+    <span class="type-tag">${site.future ? 'Future site' : `Stop ${routeNo(site.id)}`} · ${ROLES[site.role]} <b>· ${site.street}</b></span>
     <h2>${site.name}</h2>
     <p class="blurb">${site.headline}</p>
     <label class="inplan" for="inplan"><input type="checkbox" id="inplan" ${inPlan(site.id) ? 'checked' : ''} /> Include in the plan</label>
@@ -505,7 +510,7 @@ function renderPlan() {
         <tr class="tot"><td>Total</td><td class="h">${range(t.setup)}</td><td class="h">${range(t.annual)}</td></tr>
       </tbody>
     </table>
-    ${left.length ? `<p class="fine">Not included: ${left.map((s) => s.name).join(', ')}. Tick them in the list to add them.</p>` : ''}
+    ${left.length ? `<p class="fine"><b>Future sites</b> (not costed in this phase): ${left.map((s) => `<button class="linkish" data-site="${s.id}">${s.name}</button>`).join(', ')}. Tick them in the list to add them.</p>` : ''}
     <details class="costs"><summary>Where the prices come from</summary>
       <ul class="sources">${PRICE_NOTES.map(([n, u]) => `<li><a href="${u}" target="_blank" rel="noopener">${n}</a></li>`).join('')}</ul>
       <p class="fine">Containers, signs and specialist work are typical trade prices. Plants use the mix chosen above. Free woodchip from local tree surgeons, donated plants and cuttings grown by volunteers would bring costs down further.</p>
@@ -556,7 +561,7 @@ function planText() {
   const lines = [
     'HITCHIN IN BLOOM: PROPOSED PLANTING PLAN',
     '',
-    `${t.count} sites, delivered by volunteers, with paid specialists only where needed (traffic management, work at height, structural fixings, machinery). Plants bought: ${SOURCING[state.sourcing].name.toLowerCase()}.`,
+    `Phase 1: ${t.count} sites, delivered by volunteers, with paid specialists only where needed (traffic management, work at height, structural fixings, machinery). Plants bought: ${SOURCING[state.sourcing].name.toLowerCase()}.`,
     `Set-up ${range(t.setup)} (including 10% contingency). Running costs ${range(t.annual)} a year.`,
     vol ? `Volunteer time: about ${hrs(t.setupHours)} hours to plant, then ${hrs(t.yearHours)} hours a year (about ${t.volunteers} regular volunteers), worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year as in-kind match funding.` : '',
     'Figures are indicative ranges for budgeting, based on typical UK prices and quantities measured from a 3D model of the town. Quotes to follow.',
@@ -571,7 +576,9 @@ function planText() {
     for (const p of t.programme) lines.push(`${p.label}: ${range(p.capital)} set-up, ${range(p.annual)} a year.`);
     lines.push('');
   }
-  lines.push('SITES, IN JUDGES’ ROUTE ORDER');
+  const later = SITES.filter((x) => !inPlan(x.id));
+  if (later.length) { lines.push(`FUTURE SITES (later phases, not costed here): ${later.map((x) => x.name).join(', ')}.`); lines.push(''); }
+  lines.push('PHASE 1 SITES, IN JUDGES’ ROUTE ORDER');
   for (const s of orderedSites().filter((x) => inPlan(x.id))) {
     const o = optionOf(s.id), c = siteCost(s.id), i = info(s.id);
     lines.push(`\n${routeNo(s.id)}. ${s.name} (${s.street}) · ${ROLES[s.role]}`);

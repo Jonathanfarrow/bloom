@@ -149,8 +149,6 @@ export const PRICES = {
   wildPlug: { wholesale: [0.45, 0.8], retail: [1, 1.5], unit: 'plant' },
   compost: { wholesale: [2, 4], retail: [6, 8], unit: 'm² (5 cm layer)' },
   rose: { wholesale: [3, 6], retail: [10, 18], unit: 'plant' },                  // bare-root in winter vs potted
-  hedging: { wholesale: [1.5, 3], retail: [5, 9], unit: 'plant' },               // Ilex crenata / yew whips (box blight-free)
-  topiary: { wholesale: [15, 35], retail: [40, 90], unit: 'plant' },       // bulk bag £40–80/m³ vs 50 L bags
   mulch: { wholesale: [2, 4], retail: [5, 7], unit: 'm² (5 cm layer)' },         // bulk bark; free woodchip from tree surgeons cuts this to nothing
 };
 export const SOURCING = {
@@ -210,11 +208,8 @@ export const RATES = {
   coordination: { label: 'Scheme coordination and publicity', q: 1, mat: [0, 0], lab: [300, 800], vol: 20 },
   gardenPlant: { label: 'Roses (2 per m²), delphiniums, foxgloves and perennials (3 per m²), mulch', q: 'area', mat: (P) => add(times(2, P('rose')), times(3, P('perennial')), P('mulch')), lab: [15, 25], vol: 0.35 },
   gardenCare: { label: 'Deadheading, rose pruning, staking, weeding', q: 'area', mat: [0.5, 1.5], lab: [5, 9], vol: 0.6 },
-  hedge: { label: 'Low evergreen hedging (Ilex crenata or yew, 5 per metre)', q: 'hedge', mat: (P) => times(5, P('hedging')), lab: [6, 12], vol: 0.3 },
-  hedgeTrim: { label: 'Hedge trimming twice a year', q: 'hedge', mat: [0, 0], lab: [1, 2], vol: 0.15 },
-  gravel: { label: 'Gravel paths: membrane, steel edging, self-binding gravel', q: 'gravel', mat: [8, 15], lab: [15, 30], vol: 0.5 },
-  roseArch: { label: 'Metal rose arch with two climbing roses', q: 'arches', mat: (P) => add([120, 350], times(2, P('rose'))), lab: [0, 0], vol: 3 },
-  topiary: { label: 'Topiary yew cones and balls', q: 'topiary', mat: (P) => P('topiary'), lab: [0, 0], vol: 0.3 },
+  gravel: { label: 'Gravel paths: membrane and self-binding gravel', q: 'gravel', mat: [7, 12], lab: [15, 30], vol: 0.5 },
+  bedEdging: { label: 'Steel bed edging', q: 'edging', mat: [4, 8], lab: [3, 6], vol: 0.15 },
   bench: { label: 'Bench (often sponsored as a memorial bench)', q: 'benches', mat: [300, 800], lab: [0, 0], vol: 2 },
   sundial: { label: 'Stone sundial on a plinth', q: 1, mat: [400, 1500], lab: [0, 0], vol: 4 },
 };
@@ -238,9 +233,10 @@ export const ROLES = {
 
 export const LEVEL = ['Low', 'Medium', 'High'];
 
-// A suggested order for the judges' tour: arrive by train, see the town from the
-// hill, walk in through the café street and gardens to the historic centre and river.
-export const ROUTE = ['station', 'windmill-hill', 'hermitage-road', 'bancroft-gardens', 'town-hall', 'market-place', 'baskets', 'sun-street', 'st-marys', 'river-hiz', 'bridge-street', 'butts-close', 'gateway'];
+// A suggested order for the judges' tour. Phase 1: the English garden, Market Place,
+// St Mary's, then up to the lavender on Windmill Hill to finish with the view.
+// Future sites follow.
+export const ROUTE = ['bancroft-gardens', 'market-place', 'st-marys', 'windmill-hill', 'baskets', 'sun-street', 'hermitage-road', 'town-hall', 'river-hiz', 'bridge-street', 'station', 'butts-close', 'gateway'];
 
 // ---------------------------------------------------------------------------
 // Sites. Each has 2–3 options; the first is the recommended one.
@@ -274,13 +270,6 @@ export const SITES = [
         maintenance: 0, impact: 2, wildlife: 2,
         shapes: [{ kind: 'ribbon', pts: [[424, -34], [429, -21], [434, -9], [440, 1], [447, 11], [454, 20], [461, 29], [469, 38], [478, 46], [488, 55], [498, 64]], width: 16, spacing: 1.5, every: 0.75, within: 'Windmill Hill' }],
         capital: ['lavenderPlant', 'sign'], annual: ['lavenderCare'],
-      },
-      {
-        id: 'meadow', name: 'Wildflower slope', scheme: 'wildflower',
-        summary: 'Sow the whole west slope as a native wildflower meadow, with mown paths through it. The lowest cost per square metre of any option, and the best for wildlife.',
-        maintenance: 0, impact: 1, wildlife: 2,
-        shapes: [{ kind: 'meadowpoly', pts: [[362, -100], [418, -112], [428, -46], [448, -26], [452, 12], [366, 8]], within: 'Windmill Hill', density: 0.8 }],
-        capital: ['meadowPrep', 'meadowSeed', 'sign'], annual: ['meadowCut'],
       },
       {
         id: 'bulbs', name: 'River of crocus', scheme: 'bulbs',
@@ -338,6 +327,7 @@ export const SITES = [
   },
   {
     id: 'baskets',
+    future: true,
     name: 'Town centre hanging baskets',
     street: 'High Street, Sun Street, Bucklersbury, Churchyard',
     role: 'centre',
@@ -383,6 +373,7 @@ export const SITES = [
   },
   {
     id: 'sun-street',
+    future: true,
     name: 'Sun Street window boxes',
     street: 'Sun Street',
     role: 'centre',
@@ -409,6 +400,7 @@ export const SITES = [
   },
   {
     id: 'hermitage-road',
+    future: true,
     name: 'Hermitage Road planters',
     street: 'Hermitage Road',
     role: 'centre',
@@ -442,6 +434,7 @@ export const SITES = [
   },
   {
     id: 'bridge-street',
+    future: true,
     name: 'Bridge Street bridge',
     street: 'Bridge Street',
     role: 'gateway',
@@ -469,6 +462,7 @@ export const SITES = [
   },
   {
     id: 'gateway',
+    future: true,
     name: 'Hitchin Hill roundabout',
     street: 'London Road / Stevenage Road / Park Way',
     role: 'gateway',
@@ -502,6 +496,7 @@ export const SITES = [
   },
   {
     id: 'station',
+    future: true,
     name: 'Station Approach',
     street: 'Station Approach',
     role: 'gateway',
@@ -522,6 +517,7 @@ export const SITES = [
   },
   {
     id: 'river-hiz',
+    future: true,
     name: 'River Hiz banks',
     street: 'River Hiz, Bridge Street to Portmill Lane',
     role: 'green',
@@ -555,27 +551,26 @@ export const SITES = [
     headline: 'A proper English garden in the heart of the town: somewhere people come to see.',
     why: [
       'Bancroft Gardens already has formal paths and a clear lawn about 40 m square beside the main walk, big enough for a garden with several beds.',
-      'A garden of several beds, with roses, hedges, gravel paths and a sundial, gives visitors a reason to come and stay, not just walk past.',
+      'A garden of several flower beds, with gravel paths and a sundial to sit by, gives visitors a reason to come and stay, not just walk past.',
       'Planted with roses, delphiniums and lavender, it is at its best in July, when the judges come.',
-      'Benches, arches and a sundial are ideal for sponsorship and memorial giving, and the beds can be adopted by volunteer teams.',
+      'The benches and sundial suit sponsorship and memorial giving, and each bed can be adopted by a volunteer team.',
     ],
     owner: 'North Hertfordshire District Council (parks), to confirm',
     checks: [
       'Agree the layout with the parks team, and check for underground services before digging paths.',
-      'Box blight: use Ilex crenata or yew for the low hedges instead of box.',
-      'A water point nearby for the first two summers while the hedges and roses establish.',
+      'A water point nearby for the first two summers while the roses establish.',
     ],
-    partners: ['Council parks team', 'Volunteer bed-adoption teams', 'Bench and arch sponsors', 'Local garden club or horticultural society'],
+    partners: ['Council parks team', 'Volunteer bed-adoption teams', 'Bench sponsors', 'Local garden club or horticultural society'],
     options: [
       {
         id: 'english', name: 'English garden', scheme: 'english',
-        summary: 'A garden enclosed by a low evergreen hedge, with rose arches over its four entrances and gravel paths leading to a central sundial with benches. Four hedged beds hold roses, delphiniums, foxgloves and lavender, framed by topiary. It is approached along a double border beside the main path.',
-        maintenance: 2, impact: 2, wildlife: 2,
+        summary: 'Four large flower beds of roses, delphiniums, foxgloves and lavender, with gravel paths crossing between them to a central sundial and benches. It is approached along a double border beside the main path. Volunteer teams could each adopt a bed.',
+        maintenance: 1, impact: 2, wildlife: 2,
         shapes: [
           { kind: 'parterre', c: [263, -603], size: 36, rot: 30 },
           { kind: 'border', pts: [[218, -575], [236, -604], [256, -635]], o0: 1.4, o1: 4.0 },
         ],
-        capital: ['gardenPlant', 'bedPrep', 'hedge', 'gravel', 'roseArch', 'topiary', 'bench', 'sundial'], annual: ['gardenCare', 'hedgeTrim'],
+        capital: ['gardenPlant', 'bedPrep', 'bedEdging', 'gravel', 'bench', 'sundial'], annual: ['gardenCare'],
       },
       {
         id: 'perennial', name: 'Double herbaceous border', scheme: 'perennial',
@@ -583,13 +578,6 @@ export const SITES = [
         maintenance: 1, impact: 1, wildlife: 2,
         shapes: [{ kind: 'border', pts: [[218, -575], [236, -604], [256, -635]], o0: 1.4, o1: 4.4 }],
         capital: ['perennialPlant', 'bedPrep'], annual: ['perennialCare'],
-      },
-      {
-        id: 'carpet', name: 'Traditional carpet bed', scheme: 'summer',
-        summary: 'A round carpet bed on the lawn: rings of summer bedding with a six-pointed star picked out across the middle, in the classic municipal style. The most expensive to run.',
-        maintenance: 2, impact: 2, wildlife: 0,
-        shapes: [{ kind: 'carpet', c: [262, -600], r: 10, bands: 5 }],
-        capital: ['bedPrep'], annual: ['bedding'],
       },
     ],
   },
@@ -622,6 +610,7 @@ export const SITES = [
   },
   {
     id: 'town-hall',
+    future: true,
     name: 'Town Hall',
     street: 'Brand Street',
     role: 'centre',
@@ -642,6 +631,7 @@ export const SITES = [
   },
   {
     id: 'butts-close',
+    future: true,
     name: 'Butts Close',
     street: 'Butts Close',
     role: 'green',

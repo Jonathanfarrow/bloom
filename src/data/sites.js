@@ -149,6 +149,7 @@ export const PRICES = {
   wildPlug: { wholesale: [0.45, 0.8], retail: [1, 1.5], unit: 'plant' },
   compost: { wholesale: [2, 4], retail: [6, 8], unit: 'm² (5 cm layer)' },
   rose: { wholesale: [3, 6], retail: [10, 18], unit: 'plant' },                  // bare-root in winter vs potted
+  hedging: { wholesale: [1.5, 3], retail: [5, 9], unit: 'plant' },               // Ilex crenata / yew whips (no box blight)
   mulch: { wholesale: [2, 4], retail: [5, 7], unit: 'm² (5 cm layer)' },         // bulk bark; free woodchip from tree surgeons cuts this to nothing
 };
 export const SOURCING = {
@@ -210,6 +211,8 @@ export const RATES = {
   gardenCare: { label: 'Deadheading, rose pruning, staking, weeding', q: 'area', mat: [0.5, 1.5], lab: [5, 9], vol: 0.6 },
   gravel: { label: 'Gravel paths: membrane and self-binding gravel', q: 'gravel', mat: [7, 12], lab: [15, 30], vol: 0.5 },
   bedEdging: { label: 'Steel bed edging', q: 'edging', mat: [4, 8], lab: [3, 6], vol: 0.15 },
+  hedge: { label: 'Low hedge round the beds (Ilex crenata or yew, 5 per metre)', q: 'hedge', mat: (P) => times(5, P('hedging')), lab: [6, 12], vol: 0.3 },
+  hedgeTrim: { label: 'Trimming the low hedges twice a year', q: 'hedge', mat: [0, 0], lab: [1, 2], vol: 0.15 },
   bench: { label: 'Bench (often sponsored as a memorial bench)', q: 'benches', mat: [300, 800], lab: [0, 0], vol: 2 },
   sundial: { label: 'Stone sundial on a plinth', q: 1, mat: [400, 1500], lab: [0, 0], vol: 4 },
 };
@@ -558,19 +561,20 @@ export const SITES = [
     owner: 'North Hertfordshire District Council (parks), to confirm',
     checks: [
       'Agree the layout with the parks team, and check for underground services before digging paths.',
+      'Box blight: use Ilex crenata or yew for the low hedges instead of box.',
       'A water point nearby for the first two summers while the roses establish.',
     ],
     partners: ['Council parks team', 'Volunteer bed-adoption teams', 'Bench sponsors', 'Local garden club or horticultural society'],
     options: [
       {
         id: 'english', name: 'English garden', scheme: 'english',
-        summary: 'Four large flower beds of roses, delphiniums, foxgloves and lavender, with gravel paths crossing between them to a central sundial and benches. It is approached along a double border beside the main path. Volunteer teams could each adopt a bed.',
+        summary: 'Four large flower beds, each framed by a low clipped hedge and planted with roses, delphiniums, foxgloves and lavender, with gravel paths crossing between them to a central sundial and benches. It is approached along a double border beside the main path. Volunteer teams could each adopt a bed.',
         maintenance: 1, impact: 2, wildlife: 2,
         shapes: [
           { kind: 'parterre', c: [263, -603], size: 36, rot: 30 },
           { kind: 'border', pts: [[218, -575], [236, -604], [256, -635]], o0: 1.4, o1: 4.0 },
         ],
-        capital: ['gardenPlant', 'bedPrep', 'bedEdging', 'gravel', 'bench', 'sundial'], annual: ['gardenCare'],
+        capital: ['gardenPlant', 'bedPrep', 'hedge', 'gravel', 'bench', 'sundial'], annual: ['gardenCare', 'hedgeTrim'],
       },
       {
         id: 'perennial', name: 'Double herbaceous border', scheme: 'perennial',

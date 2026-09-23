@@ -116,7 +116,7 @@ export function buildSites(sites, town) {
     const R = roles(option.scheme);
     const slots = [];
     let area = 0, units = 0;
-    const extras = { edging: 0, gravel: 0, benches: 0 };
+    const extras = { edging: 0, hedge: 0, gravel: 0, benches: 0 };
     const mk = (x, z, y, extra = {}) => ({ x, z, y, r: r(), r2: r(), r3: r(), delay: 0.04 + r() * 0.56, band: -1, ...extra });
     const slot = (x, z, y, extra) => { const s = mk(x, z, y, extra); slots.push(s); return s; };
     // Ground-level planting: skip anything inside a building (or on a path, for plants in grass)
@@ -178,12 +178,13 @@ export function buildSites(sites, town) {
           const up = [0, 1, 0];
           const quadW = (pts, y, c) => { const P = pts.map(([u, v]) => { const [x, z] = W(u, v); return [x, y ?? Y(x, z) + 0.07, z]; }); batch.quad(P[0], P[1], P[2], P[3], c, null, up); };
           const GRAVEL = col('#dccfae'), METAL = col('#2b3730'), STONE = col('#d2c8b2');
-          // crisp steel edging round each bed
+          // a low clipped hedge round each bed
+          const HEDGE = col('#3a6234');
           const edgeRun = (u0, v0, u1, v1) => {
             const [x0, z0] = W(u0, v0), [x1, z1] = W(u1, v1), L = Math.hypot(x1 - x0, z1 - z0);
             if (L < 0.05) return;
-            batch.box(L + 0.04, 0.2, 0.05, (x0 + x1) / 2, Y((x0 + x1) / 2, (z0 + z1) / 2) - 0.05, (z0 + z1) / 2, -Math.atan2(z1 - z0, x1 - x0), METAL);
-            extras.edging += L;
+            batch.box(L + 0.3, 0.42, 0.34, (x0 + x1) / 2, Y((x0 + x1) / 2, (z0 + z1) / 2), (z0 + z1) / 2, -Math.atan2(z1 - z0, x1 - x0), HEDGE);
+            extras.hedge += L;
           };
           occ.markRect(cx, cz, sh.size + 2, sh.size + 2, a, 5);
           // gravel over the whole garden floor
@@ -193,7 +194,7 @@ export function buildSites(sites, town) {
             quadW([[u0, v0], [u0 + gs, v0], [u0 + gs, v0 + gs], [u0, v0 + gs]], null, GRAVEL);
           }
           extras.gravel += (2 * S) ** 2;
-          // four beds, each a square with its inner corner cut round the central circle
+          // four hedged beds, each a square with its inner corner cut round the central circle
           const pathHalf = 1.3, inner = S - 2.2, R0 = 5.4, bedArea0 = area;
           for (const [su, sv] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
             const loc = [];
@@ -210,9 +211,9 @@ export function buildSites(sites, town) {
               edgeRun(u0 * su, v0 * sv, u1 * su, v1 * sv);
             }
             const list = [];
-            triGrid(polyBounds(bed), 0.42, r, (x, z) => { if (pointInPoly(x, z, bed) && distToPoly(x, z, bed) > 0.15) list.push(slot(x, z, y0 + 0.14, { s: 1.05 })); });
+            triGrid(polyBounds(bed), 0.42, r, (x, z) => { if (pointInPoly(x, z, bed) && distToPoly(x, z, bed) > 0.3) list.push(slot(x, z, y0 + 0.14, { s: 1.05 })); });
             const maxD = Math.max(0.5, ...list.map((q) => distToPoly(q.x, q.z, bed)));
-            designBed(list, R, r, { edgeOf: (q) => distToPoly(q.x, q.z, bed) - 0.15, depthOf: (q) => distToPoly(q.x, q.z, bed) / maxD, drift: 1.5, edgeBand: 0.5, edgePlant: sh.edgePlant ?? 4 });
+            designBed(list, R, r, { edgeOf: (q) => distToPoly(q.x, q.z, bed) - 0.3, depthOf: (q) => distToPoly(q.x, q.z, bed) / maxD, drift: 1.5, edgeBand: 0.5, edgePlant: sh.edgePlant ?? 4 });
             area += list.length * 0.42 * 0.42 * 0.866;
           }
           extras.gravel -= area - bedArea0;

@@ -117,38 +117,55 @@ export const SCHEMES = {
 
 // ---------------------------------------------------------------------------
 // Costs. Indicative UK prices (2025/26) for budgeting only: get quotes before
-// bidding. Each line is [what, quantity, low £, high £] where quantity is
-// 'area' (m², measured from the model), 'units' (containers counted from the
-// model) or a fixed number.
+// bidding. Each rate splits into materials and labour so the plan can be costed
+// as a volunteer-led programme (volunteers replace labour where they safely can)
+// or fully contracted.
+//   q:   'area' (m², measured from the model), 'units' (containers counted from
+//        the model) or a fixed number
+//   mat / lab: £ per unit, low–high
+//   vol: volunteer hours per unit when volunteers do the work (0 = must be paid)
 // ---------------------------------------------------------------------------
 export const RATES = {
-  bedPrep: ['Bed preparation, soil and edging', 'area', 15, 30],
-  bedding: ['Seasonal bedding, two plantings a year', 'area', 55, 85],
-  perennialPlant: ['Perennial plants (6 per m²), mulch', 'area', 30, 50],
-  perennialCare: ['Weeding, cutting back, top-up plants', 'area', 4, 8],
-  lavenderPlant: ['Lavender (4 per m²), ground prep, mulch', 'area', 18, 28],
-  lavenderCare: ['Late-summer trim and weeding', 'area', 2, 4],
-  meadowSow: ['Ground preparation and native seed', 'area', 2, 5],
-  meadowPlugs: ['Wildflower plug plants and seed', 'area', 8, 15],
-  meadowCut: ['Annual cut and collect', 'area', 0.4, 1],
-  bulbs: ['Bulbs (25 per m²), planted by volunteers', 'area', 4, 8],
-  basket: ['Basket, liner, bracket fitting', 'units', 60, 110],
-  basketCheck: ['Lamp-column structural check', 'units', 25, 50],
-  basketCare: ['Planting and daily watering, one season', 'units', 90, 150],
-  planterLarge: ['Large planter (1.2–1.5 m), delivered', 'units', 700, 1500],
-  planterLargeCare: ['Two plantings a year and watering', 'units', 250, 450],
-  planterTimber: ['Timber street planter, delivered', 'units', 350, 700],
-  planterTimberCare: ['Perennial and bulb care, watering', 'units', 60, 120],
-  trough: ['Parapet trough with fixings', 'units', 200, 400],
-  troughCare: ['Planting and watering', 'units', 70, 120],
-  windowBox: ['Matching window box, supplied to the business', 'units', 45, 80],
-  raisedBed: ['Stone-faced raised bed', 'units', 1200, 2500],
-  centrepiece: ['Tiered centrepiece planter', 1, 3000, 6000],
-  centrepieceCare: ['Centrepiece planting and watering', 1, 700, 1100],
-  trafficMgmt: ['Traffic management, 3 visits a year', 3, 250, 600],
-  sign: ['Sponsor or interpretation sign', 1, 400, 900],
-  coordination: ['Scheme coordination and publicity', 1, 300, 800],
+  bedPrep: { label: 'Bed preparation, peat-free compost and edging', q: 'area', mat: [8, 15], lab: [7, 15], vol: 0.3 },
+  bedding: { label: 'Seasonal bedding, two plantings a year', q: 'area', mat: [18, 30], lab: [37, 55], vol: 0.8 },
+  perennialPlant: { label: 'Perennial plants (6 per m²) and mulch', q: 'area', mat: [18, 30], lab: [12, 20], vol: 0.25 },
+  perennialCare: { label: 'Weeding, cutting back, top-up plants', q: 'area', mat: [1, 2], lab: [3, 6], vol: 0.3 },
+  lavenderPlant: { label: 'Lavender plants (4 per m²), ground prep, mulch', q: 'area', mat: [12, 18], lab: [6, 10], vol: 0.2 },
+  lavenderCare: { label: 'Late-summer trim and weeding', q: 'area', mat: [0, 0.5], lab: [2, 3.5], vol: 0.06 },
+  meadowPrep: { label: 'Ground preparation (machinery)', q: 'area', mat: [0, 0], lab: [1, 3], vol: 0 },
+  meadowSeed: { label: 'Native wildflower seed, sown by hand', q: 'area', mat: [0.8, 1.5], lab: [0.2, 0.5], vol: 0.01 },
+  meadowPlugs: { label: 'Wildflower plug plants and seed', q: 'area', mat: [5, 9], lab: [3, 6], vol: 0.15 },
+  meadowCut: { label: 'Annual cut and collect (machinery)', q: 'area', mat: [0, 0], lab: [0.4, 1], vol: 0 },
+  bulbs: { label: 'Bulbs (25 per m²) and planting', q: 'area', mat: [3.5, 7], lab: [3, 6], vol: 0.25 },
+  basket: { label: 'Basket, liner and bracket', q: 'units', mat: [45, 80], lab: [0, 0], vol: 0 },
+  basketFit: { label: 'Structural check and bracket fitting on lamp columns', q: 'units', mat: [0, 0], lab: [40, 80], vol: 0 },
+  basketPlanting: { label: 'Plants, peat-free compost, feed; planting up', q: 'units', mat: [25, 40], lab: [15, 25], vol: 0.75 },
+  basketHang: { label: 'Hanging and taking down (access equipment)', q: 'units', mat: [0, 0], lab: [15, 30], vol: 0 },
+  basketWater: { label: 'Watering, June to September (lance from the ground)', q: 'units', mat: [2, 5], lab: [50, 85], vol: 6 },
+  planterLarge: { label: 'Large planter (1.2–1.5 m), delivered', q: 'units', mat: [700, 1500], lab: [0, 0], vol: 0 },
+  planterLargeCare: { label: 'Two plantings a year and watering', q: 'units', mat: [110, 180], lab: [140, 270], vol: 12 },
+  planterTimber: { label: 'Timber street planter, delivered', q: 'units', mat: [350, 700], lab: [0, 0], vol: 0 },
+  planterTimberCare: { label: 'Perennial and bulb care, watering', q: 'units', mat: [25, 45], lab: [35, 75], vol: 4 },
+  trough: { label: 'Parapet trough and fixing to the bridge', q: 'units', mat: [150, 300], lab: [50, 100], vol: 0 },
+  troughCare: { label: 'Planting and watering', q: 'units', mat: [25, 40], lab: [45, 80], vol: 5 },
+  windowBox: { label: 'Matching window box, supplied to the business', q: 'units', mat: [45, 80], lab: [0, 0], vol: 0 },
+  raisedBed: { label: 'Stone-faced raised bed (built by a contractor)', q: 'units', mat: [600, 1100], lab: [600, 1400], vol: 0 },
+  centrepiece: { label: 'Tiered centrepiece planter', q: 1, mat: [3000, 6000], lab: [0, 0], vol: 0 },
+  centrepieceCare: { label: 'Centrepiece planting and watering', q: 1, mat: [250, 400], lab: [450, 700], vol: 30 },
+  trafficMgmt: { label: 'Traffic management, 3 visits a year (must be paid)', q: 3, mat: [0, 0], lab: [250, 600], vol: 0 },
+  sign: { label: 'Sponsor or interpretation sign', q: 1, mat: [400, 900], lab: [0, 0], vol: 0 },
+  coordination: { label: 'Scheme coordination and publicity', q: 1, mat: [0, 0], lab: [300, 800], vol: 20 },
 };
+
+// Running a volunteer programme has its own costs. Contractors include these in their prices.
+export const PROGRAMME = [
+  { label: 'Tools, gloves, kneelers, first-aid kits', capital: [600, 1500], annual: [100, 300], when: 'volunteer' },
+  { label: 'Watering bowser on a trailer (about 1,000 litres)', capital: [1500, 3500], annual: [200, 500], when: 'containers' },
+  { label: 'Group insurance (RHS community group scheme, check cover)', capital: [0, 0], annual: [100, 300], when: 'volunteer' },
+  { label: 'Volunteer training: first aid, working safely near roads', capital: [0, 0], annual: [200, 600], when: 'volunteer' },
+  { label: 'Anglia in Bloom entry and judges’ briefing notes (check current fee)', capital: [0, 0], annual: [250, 700], when: 'always' },
+];
+export const VOLUNTEER_RATE = 12.5; // £/hour used to value volunteer time as in-kind match funding
 
 export const ROLES = {
   flagship: 'Flagship',
@@ -158,6 +175,10 @@ export const ROLES = {
 };
 
 export const LEVEL = ['Low', 'Medium', 'High'];
+
+// A suggested order for the judges' tour: arrive by train, see the town from the
+// hill, walk in through the café street and gardens to the historic centre and river.
+export const ROUTE = ['station', 'windmill-hill', 'hermitage-road', 'bancroft-gardens', 'town-hall', 'market-place', 'baskets', 'sun-street', 'st-marys', 'river-hiz', 'bridge-street', 'butts-close', 'gateway'];
 
 // ---------------------------------------------------------------------------
 // Sites. Each has 2–3 options; the first is the recommended one.
@@ -187,9 +208,9 @@ export const SITES = [
     options: [
       {
         id: 'lavender', name: 'Lavender ribbon', scheme: 'lavender',
-        summary: 'A broad band of lavender rows across the upper west slope, facing the town. It can be planted in phases over two or three years.',
+        summary: 'A sweeping ribbon of lavender that follows the curve of the hill, with rows running along the slope like a Hitchin lavender field. It can be planted in phases over two or three years.',
         maintenance: 0, impact: 2, wildlife: 2,
-        shapes: [{ kind: 'rows', pts: [[376, -74], [406, -84], [414, -26], [384, -18]], spacing: 1.8, within: 'Windmill Hill' }],
+        shapes: [{ kind: 'ribbon', pts: [[384, -122], [381, -106], [381, -90], [383, -75], [385, -60], [385, -45], [384, -31], [388, -18], [394, -7], [402, 3], [412, 13]], width: 16, spacing: 1.5, every: 0.75, within: 'Windmill Hill' }],
         capital: ['lavenderPlant', 'sign'], annual: ['lavenderCare'],
       },
       {
@@ -197,11 +218,11 @@ export const SITES = [
         summary: 'Sow the whole west slope as a native wildflower meadow, with mown paths through it. The lowest cost per square metre of any option, and the best for wildlife.',
         maintenance: 0, impact: 1, wildlife: 2,
         shapes: [{ kind: 'meadowpoly', pts: [[362, -100], [418, -112], [428, -46], [448, -26], [452, 12], [366, 8]], within: 'Windmill Hill', density: 0.8 }],
-        capital: ['meadowSow', 'sign'], annual: ['meadowCut'],
+        capital: ['meadowPrep', 'meadowSeed', 'sign'], annual: ['meadowCut'],
       },
       {
         id: 'bulbs', name: 'Spring bulb drifts', scheme: 'bulbs',
-        summary: 'Drifts of crocus and daffodils across the slope. A spring spectacle planted entirely by volunteers, with no running costs.',
+        summary: 'Drifts of crocus and daffodils across the slope. A spring spectacle that suits community planting days, with no running costs.',
         maintenance: 0, impact: 1, wildlife: 1,
         shapes: [
           { kind: 'meadow', c: [390, -62], r: 20, within: 'Windmill Hill' },
@@ -285,7 +306,7 @@ export const SITES = [
           { kind: 'baskets', road: 'Sun Street', from: 8, to: 160, every: 18, offset: 4.4 },
           { kind: 'baskets', road: 'Churchyard', from: 6, to: 75, every: 14, offset: 3 },
         ],
-        capital: ['basket', 'basketCheck'], annual: ['basketCare'],
+        capital: ['basket', 'basketFit'], annual: ['basketPlanting', 'basketHang', 'basketWater'],
       },
       {
         id: 'circuit', name: 'Full town-centre circuit', scheme: 'summer',
@@ -298,7 +319,7 @@ export const SITES = [
           { kind: 'baskets', road: 'Bucklersbury', from: 8, to: 185, every: 18, offset: 4.4 },
           { kind: 'baskets', road: 'Bancroft', from: 8, to: 260, every: 22, offset: 5.4 },
         ],
-        capital: ['basket', 'basketCheck'], annual: ['basketCare'],
+        capital: ['basket', 'basketFit'], annual: ['basketPlanting', 'basketHang', 'basketWater'],
       },
     ],
   },
@@ -588,14 +609,49 @@ export const PLACE_LABELS = [
   { text: 'Hitchin Station', at: [1000, -690] },
 ];
 
-// Cost of one option, given the quantities measured from the model
-export function costOf(option, measured) {
+// Cost of one option, given quantities measured from the model and the delivery model
+// ('volunteer' or 'contractor'). Returns paid costs and volunteer hours.
+export function costOf(option, measured, model = 'volunteer') {
   const lines = (keys) => keys.map((k) => {
-    const [label, q, lo, hi] = RATES[k];
-    const qty = q === 'area' ? measured.area : q === 'units' ? measured.units : q;
-    return { label, qty, unit: q === 'area' ? 'm²' : q === 'units' ? '' : '', lo: lo * qty, hi: hi * qty, per: [lo, hi], kind: q };
+    const r = RATES[k];
+    const qty = r.q === 'area' ? measured.area : r.q === 'units' ? measured.units : r.q;
+    const byVolunteers = model === 'volunteer' && r.vol > 0;
+    const lo = (r.mat[0] + (byVolunteers ? 0 : r.lab[0])) * qty, hi = (r.mat[1] + (byVolunteers ? 0 : r.lab[1])) * qty;
+    return { label: r.label, qty, kind: r.q === 'area' || r.q === 'units' ? r.q : 'fixed', lo, hi, hours: byVolunteers ? r.vol * qty : 0, byVolunteers, paidLabour: !byVolunteers && r.lab[1] > 0 };
   });
   const capital = lines(option.capital), annual = lines(option.annual);
   const sum = (ls) => ls.reduce((a, l) => [a[0] + l.lo, a[1] + l.hi], [0, 0]);
-  return { capital, annual, capitalTotal: sum(capital), annualTotal: sum(annual) };
+  const hrs = (ls) => ls.reduce((a, l) => a + l.hours, 0);
+  return { capital, annual, capitalTotal: sum(capital), annualTotal: sum(annual), setupHours: hrs(capital), yearHours: hrs(annual) };
 }
+
+// Judging criteria (RHS Britain in Bloom standard marking sheet, used by Anglia in Bloom)
+export const JUDGING = {
+  pillars: [
+    { id: 'horticulture', name: 'Horticultural achievement', marks: 40, detail: 'Impact, design, plant choice and special features (20). Cultivation, maintenance, plant quality, sustainability and new planting (20). Judged year-round, including natural areas.' },
+    { id: 'environment', name: 'Environmental responsibility', marks: 30, detail: 'Biodiversity and wildlife, saving water, peat-free growing, recycling and composting, and care of the local environment: litter, graffiti, fly-posting, street furniture and heritage.' },
+    { id: 'community', name: 'Community participation', marks: 30, detail: 'Volunteers, schools, businesses and residents involved throughout the year, not just in summer, and people along the route who can tell the judges about their projects.' },
+  ],
+  medals: [['Gold', 85], ['Silver-gilt', 75], ['Silver', 60], ['Bronze', 50]],
+  checklist: [
+    { pillar: 'community', text: 'A year-round calendar: bulb planting in autumn, litter picks in winter, planting days in spring, with photos and press cuttings as evidence.' },
+    { pillar: 'community', text: 'Volunteers, school children and business owners waiting at stops on the route to explain their part.' },
+    { pillar: 'community', text: 'Businesses sponsoring baskets and planters, and a best-dressed shop window award to bring the high street in.' },
+    { pillar: 'environment', text: 'Peat-free compost throughout, water butts and a rainwater bowser, and bedding and prunings composted.' },
+    { pillar: 'environment', text: 'Wildlife features judges can see: meadow areas, bug hotels, bird and bat boxes, the River Hiz margins.' },
+    { pillar: 'environment', text: 'A clean route: litter, graffiti and fly-posting cleared, and tired benches, bins and signs repainted before judging week.' },
+    { pillar: 'horticulture', text: 'Plants at their peak in the July judging window, well weeded, deadheaded and watered, with no gaps or dead baskets.' },
+    { pillar: 'horticulture', text: 'Right plant, right place: drought-tolerant perennials where watering is hard, and showpiece bedding only where people gather.' },
+    { pillar: 'horticulture', text: 'One or two special features judges will remember, such as the Windmill Hill lavender and a Market Place centrepiece.' },
+    { pillar: 'community', text: 'Clear judges’ briefing notes (Anglia in Bloom uses these instead of a portfolio) and a well-timed route with room for questions.' },
+    { pillar: 'environment', text: 'Enter special awards too, e.g. parks (Bancroft Gardens, Windmill Hill) and the churchyard.' },
+  ],
+  sources: [
+    ['RHS Britain in Bloom standard marking sheet', 'https://www.rhs.org.uk/get-involved/britain-in-bloom/resources/standard-marking-sheet'],
+    ['RHS judging guidelines', 'https://www.rhs.org.uk/communities/archive/pdf/exhibitor-info/1bjudging-guidelines.pdf'],
+    ['Anglia in Bloom campaign details', 'https://www.angliainbloom.co.uk/campaign-details'],
+    ['Anglia in Bloom 2025 results', 'https://www.angliainbloom.co.uk/2025-results'],
+    ['Dunstable, Anglia in Bloom overall winner 2025', 'https://www.lutontoday.co.uk/community/dunstable-crowned-2025-anglia-in-bloom-overall-winner-and-multiple-category-successes-5307521'],
+    ['RHS community group insurance', 'https://www.rhs.org.uk/get-involved/community-gardening/resources/group-insurance'],
+  ],
+};

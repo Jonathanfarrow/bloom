@@ -13,6 +13,9 @@
   --halo: rgba(250, 252, 247, 0.9);
   --good: #2f6b3f;
   --bad: #9a4a2a;
+  --p-hort: #b83f68;
+  --p-env: #3a8150;
+  --p-com: #c07a12;
   --shadow: 0 12px 32px rgba(29, 42, 33, 0.14), 0 1px 2px rgba(29, 42, 33, 0.08);
   --display: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
   --body: 'Source Sans 3', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -36,6 +39,9 @@
     --halo: rgba(15, 21, 17, 0.85);
     --good: #8fd19e;
     --bad: #f0a582;
+    --p-hort: #ec8fb0;
+    --p-env: #8fd19e;
+    --p-com: #f2c26b;
     --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   }
 }
@@ -54,6 +60,9 @@
   --halo: rgba(15, 21, 17, 0.85);
   --good: #8fd19e;
   --bad: #f0a582;
+  --p-hort: #ec8fb0;
+  --p-env: #8fd19e;
+  --p-com: #f2c26b;
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
@@ -294,7 +303,8 @@ h1 span { color: var(--accent); }
   border: 0; background: none; padding: 0; cursor: pointer; pointer-events: auto;
 }
 .pin .dot {
-  width: 16px; height: 16px; border-radius: 50%;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; font: 700 11px/1 var(--body);
   background: var(--accent);
   box-shadow: 0 0 0 3px var(--halo), 0 2px 6px rgba(0,0,0,.3);
   transition: transform .2s;
@@ -418,3 +428,49 @@ details.costs summary { cursor: pointer; font-weight: 600; font-size: 14px; colo
 .owner { margin: 6px 0 0; font-size: 14px; }
 .detail .row { display: flex; gap: 8px; margin-top: 12px; }
 @media (max-width: 760px) { .tiles { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- Volunteer / contractor switch ---------- */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin: 0 0 10px; }
+.seg button { border: 0; background: transparent; border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; color: var(--muted); }
+.seg button[aria-pressed='true'] { background: var(--ink); color: var(--panel-solid); font-weight: 600; }
+.stop {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 8px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); font: 700 11px/1 var(--body); vertical-align: 1px;
+}
+.site-item.out .stop { background: var(--line); color: var(--muted); }
+.plan-table .grp th { font: 600 11px/1.2 var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding-top: 12px; text-align: left; }
+.plan-table .prog td { font-size: 13px; color: var(--muted); }
+
+/* ---------- Judging ---------- */
+.pillars { display: flex; flex-wrap: wrap; gap: 6px; }
+.pillars span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 9px 3px 5px; border: 1px solid var(--line); border-radius: 999px; }
+.pillars i { width: 26px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--c) calc(var(--v) * 50%), var(--line) 0); }
+.pill-horticulture i { --c: var(--p-hort); }
+.pill-environment i { --c: var(--p-env); }
+.pill-community i { --c: var(--p-com); }
+.jbar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; margin: 12px 0 6px; font: 700 12px/26px var(--body); color: #fff; text-align: center; }
+.jbar-horticulture { background: var(--p-hort); }
+.jbar-environment { background: var(--p-env); }
+.jbar-community { background: var(--p-com); }
+:root[data-theme='dark'] .jbar, .jbar { color: #fff; }
+.medals b { color: var(--ink); }
+.pillar-card { border-left: 3px solid var(--line); padding: 2px 0 2px 12px; margin: 14px 0; }
+.pc-horticulture { border-color: var(--p-hort); }
+.pc-environment { border-color: var(--p-env); }
+.pc-community { border-color: var(--p-com); }
+.pillar-card h3 { margin: 0; font: 700 16px/1.25 var(--display); display: flex; justify-content: space-between; gap: 8px; }
+.pillar-card h3 span { font: 500 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.pillar-card p { margin: 4px 0 0; font-size: 14px; }
+.plan-fit { color: var(--muted); }
+.jlist { margin: 0; padding-left: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; }
+.jlist li { position: relative; padding-left: 18px; }
+.jlist li::before { content: ''; position: absolute; left: 0; top: 7px; width: 8px; height: 8px; border-radius: 50%; }
+.jl-horticulture::before { background: var(--p-hort); }
+.jl-environment::before { background: var(--p-env); }
+.jl-community::before { background: var(--p-com); }
+.route { margin: 0; padding-left: 22px; display: grid; gap: 2px; font-size: 14px; }
+.route button { background: none; border: 0; padding: 3px 0; cursor: pointer; text-align: left; color: var(--ink); }
+.route button:hover { color: var(--accent); text-decoration: underline; }
+.route li.out button { color: var(--muted); text-decoration: line-through; }
+.sources { margin: 0; padding-left: 18px; font-size: 13px; }
+.sources a { color: var(--accent); }

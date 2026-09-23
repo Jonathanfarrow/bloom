@@ -48,7 +48,7 @@ function makeGeometries() {
     return paint(c, 1, 1, 1);
   }));
   G.stem = paint(new THREE.CylinderGeometry(0.5, 0.5, 1, 3, 1, true).translate(0, 0.5, 0), 1, 1, 1);
-  G.leaf = paint(new THREE.OctahedronGeometry(0.5).scale(1, 0.6, 1).translate(0, 0.2, 0), 1, 1, 1);
+  G.leaf = paint(new THREE.IcosahedronGeometry(0.5, 0).scale(1, 0.62, 1).translate(0, 0.2, 0), 1, 1, 1);
   return G;
 }
 

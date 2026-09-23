@@ -24,11 +24,22 @@ to the council, businesses, sponsors and residents.
     from the model
   - why the site was chosen, who owns the land, what needs checking before going
     ahead, and possible partners
+- **Volunteer-led or contractor costing.** In volunteer-led mode, volunteers
+  do the planting, watering and weeding, so only materials are costed. Work
+  that has to be paid (traffic management, work at height on lamp columns,
+  structural fixings, machinery) stays paid. The plan shows the volunteer hours
+  needed, roughly how many regular volunteers that means, and the value of that
+  time as in-kind match funding. It also adds the programme's own costs: tools,
+  a watering bowser, insurance, training and the entry fee.
 - **Plan & costs** totals the chosen options, adds a 10% contingency, and
   copies a ready-to-paste summary for a council paper. Tick sites in or out of
   the plan and the totals update.
+- **How to win** explains the Anglia in Bloom / RHS Britain in Bloom marking:
+  horticulture 40, environment 30 and community 30 marks, with Gold at 85 or
+  more. It shows which sites in the plan score strongly on each, gives a
+  checklist of what judges look for beyond the planting, and suggests a judges'
+  route. The numbered pins and the Tour follow that route.
 - **In bloom toggle**: compare the town as it is today with the town in flower.
-- **Tour**: flies between the sites in the plan.
 - **Suggest a spot**: residents click on the map to propose a new site.
 - Dark mode shows the town at dusk with lit windows and street lamps.
 - A link like `…/#windmill-hill` opens straight onto a site.

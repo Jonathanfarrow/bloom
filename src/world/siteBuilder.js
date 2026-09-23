@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Batch, col } from './batch.js';
 import { groundHeight, streetPath, riverPath, landByName, ROAD_WIDTH } from './geo.js';
-import { pointInPoly, polyBounds, rng } from './util.js';
+import { Path, pointInPoly, polyBounds, rng } from './util.js';
 import { SILL } from './buildings.js';
 
 const SOIL = col('#4e3627');
@@ -259,6 +259,27 @@ export function buildSites(sites, town) {
           });
           break;
         }
+        case 'ribbon': {
+          // A tapered, curving band along a smoothed centre line, with rows parallel to it
+          const curve = new THREE.CatmullRomCurve3(sh.pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
+          const path = new Path(curve.getSpacedPoints(120).map((v) => [v.x, v.z]));
+          const L = path.length, half = sh.width / 2;
+          let row = 0;
+          for (let o = -half; o <= half + 1e-6; o += sh.spacing, row++) {
+            for (let t = 0; t <= L; t += sh.every) {
+              // lens-shaped taper with a gentle swell so the edge isn't a straight line
+              const k = Math.sin(Math.PI * (t / L));
+              const w = half * Math.pow(k, 0.7) * (0.88 + 0.12 * Math.sin(t / 9 + row * 0.3));
+              if (Math.abs(o) > w) continue;
+              const p = path.at(t);
+              const oo = o + (r() - 0.5) * 0.15, tt = (r() - 0.5) * 0.12;
+              const x = p.x + p.nx * oo + p.dx * tt, z = p.z + p.nz * oo + p.dz * tt;
+              if (!within(x, z, sh.within)) continue;
+              groundSlot(x, z, groundHeight(x, z), sh.spacing * sh.every, { band: row % 3, s: 1.85 }, true);
+            }
+          }
+          break;
+        }
         case 'rows': {
           const b = polyBounds(sh.pts);
           let row = 0;
@@ -295,6 +316,7 @@ export function buildSites(sites, town) {
             const y0 = Math.min(...pts.map(([x, z]) => groundHeight(x, z)));
             extrude(batch, pts, y0 - 0.1, 0.55, SOIL);
             extrudeRing(batch, pts, y0 - 0.1, 0.61, MATERIALS.stone);
+            units++;
             grid(polyBounds(pts), 0.32, (x, z) => { if (pointInPoly(x, z, pts)) { slot(x, z, y0 + 0.45); area += 0.1; } });
           }
           break;

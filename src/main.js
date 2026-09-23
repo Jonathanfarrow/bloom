@@ -141,7 +141,7 @@ const streetLabels = [];
 
 function build() {
   const g = buildGround(renderer);
-  ground = g.ground;
+  ground = g.pickables;
   scene.add(g.group);
   town = buildTown();
   scene.add(town.group);
@@ -655,7 +655,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   const rect = renderer.domElement.getBoundingClientRect();
   ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  const hit = ray.intersectObject(ground, false)[0];
+  const hit = ray.intersectObjects(ground, false)[0];
   if (!hit) return;
   const { x, z } = hit.point;
   if (state.suggesting) return openIdeaForm(x, z);

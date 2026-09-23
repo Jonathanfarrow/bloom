@@ -142,19 +142,27 @@ export function buildGround(renderer) {
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
   const step = 8;
+  // Sharper centre patch, aligned to the main grid so the two meet vertex for vertex
+  const R = { x0: -524, z0: -558, x1: 564, z1: 522 };
+  const insideR = (x, z) => x > R.x0 + 0.1 && x < R.x1 - 0.1 && z > R.z0 + 0.1 && z < R.z1 - 0.1;
   const g = new THREE.PlaneGeometry(HALF_W * 2, HALF_H * 2, Math.round((HALF_W * 2) / step), Math.round((HALF_H * 2) / step));
   g.rotateX(-Math.PI / 2);
   const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) p.setY(i, groundHeight(p.getX(i), p.getZ(i)));
+  // Under the centre patch the coarse ground is dropped out of sight; otherwise its
+  // straight 8 m facets can bulge through the finer surface on the hillsides.
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    p.setY(i, groundHeight(x, z) - (!small && insideR(x, z) ? 3 : 0));
+  }
   g.computeVertexNormals();
   const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
   ground.receiveShadow = true;
   ground.name = 'ground';
   group.add(ground);
+  const pickables = [ground];
 
   // Sharper ground for the town centre, drawn just above the main ground
   if (!small) {
-    const R = { x0: -520, z0: -560, x1: 560, z1: 520 };
     const ctex = paintGround(3.2, R);
     ctex.anisotropy = tex.anisotropy;
     const cg = new THREE.PlaneGeometry(R.x1 - R.x0, R.z1 - R.z0, Math.round((R.x1 - R.x0) / 4), Math.round((R.z1 - R.z0) / 4));
@@ -167,6 +175,7 @@ export function buildGround(renderer) {
     centre.receiveShadow = true;
     centre.name = 'ground';
     group.add(centre);
+    pickables.unshift(centre);
   }
 
   // Patchwork countryside beyond the mapped area
@@ -179,7 +188,10 @@ export function buildGround(renderer) {
   for (let i = 0; i < op.count; i++) {
     const x = op.getX(i), z = op.getZ(i);
     const beyond = Math.max(0, Math.max(Math.abs(x) / HALF_W, Math.abs(z) / HALF_H) - 1);
-    op.setY(i, groundHeight(x, z) - 0.8 + beyond * 30 * (vnoise(x / 700, z / 700) - 0.4));
+    // Inside the mapped area this layer sits well below the real ground: its 50 m
+    // facets would otherwise rise through roads on concave slopes (e.g. below Windmill Hill).
+    const inside = Math.abs(x) < HALF_W - 0.1 && Math.abs(z) < HALF_H - 0.1;
+    op.setY(i, groundHeight(x, z) - (inside ? 40 : 0.8) + beyond * 30 * (vnoise(x / 700, z / 700) - 0.4));
     const wob = vnoise(x / 80, z / 80) * 50;
     c.copy(FIELDS[Math.floor(hash(Math.floor((x + wob) / 190), Math.floor((z - wob) / 150)) * FIELDS.length)]);
     colors.set([c.r, c.g, c.b], i * 3);
@@ -190,7 +202,7 @@ export function buildGround(renderer) {
   outerMesh.receiveShadow = true;
   group.add(outerMesh);
 
-  return { group, ground };
+  return { group, ground, pickables };
 }
 
 // Raised decks and stone parapets wherever a street crosses water or a path.

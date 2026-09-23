@@ -526,7 +526,7 @@ export function buildSites(sites, town) {
           // A line of round beds, each in its own colours, with a shared edging plant
           // and an obelisk of sweet peas in the middle for height
           const [ax, az] = sh.a, [bx, bz] = sh.b, n = sh.n;
-          const OAK = col('#6d4a31'), STEEL = col('#3b3f3a');
+          const OAK = col('#2f3a34'), STEEL = col('#5b4a37');
           for (let k = 0; k < n; k++) {
             const f = n === 1 ? 0.5 : k / (n - 1);
             const cx = ax + (bx - ax) * f, cz = az + (bz - az) * f, y0 = groundHeight(cx, cz), h = 0.2;

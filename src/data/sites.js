@@ -165,30 +165,66 @@ export const SCHEMES = {
 //   retail:    local garden centre or shop prices
 // SOURCING mixes the two; the default is mostly wholesale with some bought locally.
 // ---------------------------------------------------------------------------
+// Unit prices checked against published UK prices (September 2026, inc. VAT).
+// 'wholesale' = the cheapest published bulk or multi-pack price (not a private trade
+// quote); 'retail' = buying single pots or bags from a local shop or garden centre.
 export const PRICES = {
-  lavender: { wholesale: [0.7, 1.5], retail: [4.5, 6.5], unit: 'plant' },       // plugs/9 cm liners vs 9 cm pots in a shop
-  perennial: { wholesale: [0.8, 2.0], retail: [4, 7], unit: 'plant' },
-  bedding: { wholesale: [0.12, 0.25], retail: [0.35, 0.6], unit: 'plant' },     // plug plants
-  bulb: { wholesale: [0.06, 0.15], retail: [0.25, 0.45], unit: 'bulb' },
-  wildSeed: { wholesale: [0.11, 0.17], retail: [0.4, 0.6], unit: 'm² of seed' }, // £28–43/kg bulk vs small packs, sown at 4 g/m²
+  lavender: { wholesale: [0.42, 0.42], retail: [4.5, 6.39], unit: 'plant' },     // plug plants £9.99 per 24 (Dobies) vs 9 cm pots £4.50–£6.39
+  perennial: { wholesale: [3.33, 4.33], retail: [6.66, 6.99], unit: 'plant' },  // jumbo plugs, 3 for £9.99–£12.99 (Marshalls) vs 9 cm pots
+  bedding: { wholesale: [0.28, 0.28], retail: [0.38, 0.38], unit: 'plant' },     // 72 plugs for £19.99 (Thompson & Morgan) vs garden-ready from 38p
+  bulb: { wholesale: [0.19, 0.21], retail: [0.26, 0.26], unit: 'bulb' },          // crocus: £47.50 per 250 (Peter Nyssen) vs £6.39 per 25 (Crocus)
+  wildSeed: { wholesale: [0.11, 0.17], retail: [0.4, 0.6], unit: 'm² of seed' }, // £28–43/kg bulk, sown at 4 g/m²
   wildPlug: { wholesale: [0.45, 0.8], retail: [1, 1.5], unit: 'plant' },
-  compost: { wholesale: [2, 4], retail: [6, 8], unit: 'm² (5 cm layer)' },
-  rose: { wholesale: [3, 6], retail: [10, 18], unit: 'plant' },                  // bare-root in winter vs potted
-  hedging: { wholesale: [1.5, 3], retail: [5, 9], unit: 'plant' },               // Ilex crenata / yew whips (no box blight)
-  mulch: { wholesale: [2, 4], retail: [5, 7], unit: 'm² (5 cm layer)' },         // bulk bark; free woodchip from tree surgeons cuts this to nothing
+  compost: { wholesale: [4, 7.33], retail: [7, 14], unit: 'm² (5 cm layer)' },   // bulk bag £80–£147 per m³ vs 50-litre bags £7–£13.99
+  rose: { wholesale: [15.75, 18.99], retail: [18.99, 26.99], unit: 'plant' },     // bare-root (Eastcroft, Henry Street) vs potted (Crocus)
+  hedging: { wholesale: [3.64, 3.75], retail: [5.2, 16.34], unit: 'plant' },      // bare-root yew / Ilex crenata in packs of 40–150 vs small packs or pots
+  mulch: { wholesale: [2.5, 4.5], retail: [3.85, 4.5], unit: 'm² (5 cm layer)' }, // bark bulk bag £50–£90 per m³; bagged from 7.7p a litre
 };
 export const SOURCING = {
-  mixed: { name: 'Wholesale + local shops', wholesale: 0.8 },
-  wholesale: { name: 'All wholesale', wholesale: 1 },
-  retail: { name: 'All shop-bought', wholesale: 0 },
+  mixed: { name: 'Bulk packs + local shops', wholesale: 0.8 },
+  wholesale: { name: 'All bulk packs', wholesale: 1 },
+  retail: { name: 'All from local shops', wholesale: 0 },
 };
 export const PRICE_NOTES = [
-  ['Wildflower seed £28–43/kg bulk, sown at 4 g/m²', 'https://www.thegrassseedstore.co.uk/supplier/environmental/wildflower-meadow-seed/native-economy-mix/'],
-  ['Lavender Hidcote: £6.39 retail, £3.35–3.45 per 9 cm pot by the hundred; plug trays of 84 cheaper', 'https://www.ashridgetrees.co.uk/products/hidcote-english-lavender-plants'],
-  ['Crocus tommasinianus £6.39 for 25 retail; wholesale by the thousand', 'https://www.dutchbulbs.co.uk/plant-0000037/crocus-tommasinianus-barrs-purple.htm'],
-  ['Peat-free compost about £40–80 per 1 m³ bulk bag', 'https://www.gardencalc.uk/compost-calculator'],
-  ['Hanging basket plants from about £0.30 each (20 for £5.99)', 'https://www.dobies.co.uk/email/nurserymans-choice-hanging-basket'],
+  ['Lavender Hidcote plug plants: 24 for £9.99, 72 for £29.97 (42p each)', 'https://www.dobies.co.uk/flowers/perennial-plants/all/lavender-plant-hidcote_mh6195'],
+  ['Lavender Hidcote 9 cm pot: £6.39 (Crocus); £4.50 (Amazon)', 'https://www.crocus.co.uk/plants/_/lavandula-angustifolia-hidcote/classid.4047/'],
+  ['Perennial jumbo plugs: Echinacea 3 for £9.99, Salvia Caradonna 3 for £12.99', 'https://marshallsgarden.com/collections/perennial-jumbo-plugs'],
+  ['Perennials in 9 cm pots: 10 for £66.63 list price (Dobies)', 'https://www.dobies.co.uk/email/perennial-collection'],
+  ['Summer bedding: 72 plug plants for £19.99 (Thompson & Morgan)', 'https://www.robertdyas.co.uk/thompson-morgan-mixed-summer-bedding-collection-72-plug-plants'],
+  ['Crocus tommasinianus: £5.25 per 25, £47.50 per 250 (Peter Nyssen)', 'https://www.peternyssen.com/crocus-tommasinianus-barr-s-white.html'],
+  ['Crocus tommasinianus: £6.39 per 25 (Crocus)', 'https://www.crocus.co.uk/plants/_/crocus-tommasinianus/classid.1000000372/'],
+  ['Rose Iceberg bare-root: £15.75 (Eastcroft), £18.99 (Henry Street); potted £26.99 (Crocus)', 'https://www.eastcroftroses.co.uk/products/iceberg'],
+  ['Ilex crenata bare-root 20–30 cm: 40 for £149.99', 'https://www.garden4less.co.uk/product/pl/40IlexCrenata20-30'],
+  ['Yew bare-root 30–40 cm: 150 for £545.99, 10 for £51.99', 'https://www.garden4less.co.uk/product/pl/150Yew30-40'],
+  ['Peat-free compost bulk bag: £80 per 1,000 litres (Richardson); £146.58 (Dandy’s)', 'https://richardsongardensupplies.co.uk/product/peat-free-organic-compost-bulk-bag/'],
+  ['Peat-free compost 50-litre bags: £7–£13.99', 'https://plantgrow.co.uk/product/plantgrow-multi-purpose-peat-free-compost-50l-bag/'],
+  ['Bark mulch: £50–£90 per 1,000-litre bulk bag delivered', 'https://www.gardencalc.uk/mulch-calculator'],
+  ['Self-binding gravel £56–60 a tonne, covering 15–18 m²', 'https://www.pavingexpert.com/breedon_sbg_01'],
+  ['MOT Type 1 sub-base: £60–£98 a tonne in bulk bags', 'https://materialsmarket.com/products/mot-type-1-bulk-bag'],
+  ['Weed membrane: 72p–85p per m²', 'https://www.wickes.co.uk/Products/Garden+Outdoor-Landscaping/Garden-Maintenance/Landscaping-Fabric/c/1016000'],
+  ['Fibreglass round planter: 120 × 60 cm £607.95; 150 × 60 cm £794.95 (ADEZZ Circum)', 'https://www.riverhillgardensupplies.com/c/garden-pots-and-planters/adezz-garden-planters/fibreglass-planters'],
+  ['Recycled-plastic commemorative bench: from £442.20 (TDP Peak)', 'https://www.tdp.co.uk/product/peak-commemorative-bench/'],
+  ['Cast-stone sundial on a pedestal: £235–£560', 'https://www.statuesandsculptures.co.uk/garden-ornaments/sundials/stone/'],
+  ['A1 lectern interpretation sign: £550–£1,039', 'https://hornbeckgroup.com/blog/outdoor-lectern-signs-cost-and-materials'],
+  ['Steel obelisk 2.4 m: £54.55 (Johnsons); 2 m £129.99 (Waitrose Garden)', 'https://johnsons-seeds.com/products/steel-garden-obelisk-2-4m'],
+  ['Sweet pea seed: about £1.59–£2 a packet', 'https://www.simplyseed.co.uk/flower-seeds/sweet-pea-king-size-mixed-seeds.html'],
+  ['Reconditioned 1,000-litre IBC water tank: £57.50–£97', 'https://www.directwatertanks.co.uk/ibc-containers/ibc-containers-reconditioned'],
+  ['Emergency First Aid at Work course: £160–£175 + VAT per person (St John Ambulance)', 'https://www.sja.org.uk/courses/workplace-first-aid/emergency-first-aid/book-efaw/'],
+  ['National Living Wage from April 2026: £12.71 an hour', 'https://www.bishopfleming.co.uk/insights/what-national-living-wage-april-2026'],
 ];
+// Who does the work
+export const COMMUNITY = {
+  lead: 'The volunteers start with a local dads’ group that already meets regularly. Their children help too, and the aim is to bring in more people from across Hitchin as the scheme grows, so it becomes a way for the town to get to know itself.',
+  points: [
+    'Family sessions once a month, at weekends, so dads and children can come together.',
+    'Jobs for children: sowing the sweet peas at home or at school, planting bulbs, watering, and litter picks with grabbers. Always with their own parent or carer.',
+    'Every session open to anyone in Hitchin, advertised through schools, local Facebook groups and the library.',
+    'Beds and banks adopted by families, streets or businesses, with their names on the sign.',
+  ],
+};
+
+// Still estimates until a quote is in: insurance, Anglia in Bloom entry fee, tools.
+export const TO_QUOTE = ['Group insurance (RHS community group scheme, arranged by Aon / Sports Insure)', 'Anglia in Bloom entry fee (on the entry form)', 'Tools and gloves'];
 
 // Price of one item for a sourcing mix → [low, high]
 export function price(item, sourcing = 'mixed') {
@@ -203,11 +239,11 @@ const times = (n, r) => [r[0] * n, r[1] * n];
 // sourcing mix for plant material), lab is paid labour, vol is volunteer hours
 // per unit when volunteers can safely do the work (0 = must be paid).
 export const RATES = {
-  bedPrep: { label: 'Peat-free compost dug in', q: 'area', mat: (P) => P('compost'), lab: [7, 15], vol: 0.3 },
+  bedPrep: { label: 'Peat-free compost dug in (5 cm layer)', q: 'area', mat: (P) => P('compost'), lab: [7, 15], vol: 0.3 },
   bedding: { label: 'Bedding plugs, two plantings a year (20 per m² each)', q: 'area', mat: (P) => add(times(40, P('bedding')), [0.3, 0.8]), lab: [37, 55], vol: 0.8 },
   perennialPlant: { label: 'Perennials (6 per m²) and bark mulch', q: 'area', mat: (P) => add(times(6, P('perennial')), P('mulch')), lab: [12, 20], vol: 0.25 },
   perennialCare: { label: 'Weeding, cutting back, a few replacements', q: 'area', mat: [0.3, 1], lab: [3, 6], vol: 0.3 },
-  lavenderPlant: { label: 'Lavender (3.5 per m²) and gravel/bark mulch', q: 'area', mat: (P) => add(times(3.5, P('lavender')), times(0.6, P('mulch'))), lab: [6, 10], vol: 0.2 },
+  lavenderPlant: { label: 'Lavender plug plants (3.5 per m², plus 10% spare for losses); no mulch, hoed by volunteers', q: 'area', mat: (P) => times(3.85, P('lavender')), lab: [6, 10], vol: 0.2 },
   lavenderCare: { label: 'Late-summer trim, and weeding until the plants knit together', q: 'area', mat: [0, 0.1], lab: [2, 3.5], vol: 0.15 },
   establish: { label: 'Watering through the first summer while new plants establish', q: 'area', mat: [0, 0], lab: [2, 4], vol: 0.15 },
   meadowPrep: { label: 'Ground preparation (hired machinery and operator)', q: 'area', mat: [0, 0], lab: [0.4, 1.2], vol: 0 },
@@ -220,8 +256,8 @@ export const RATES = {
   basketPlanting: { label: 'Plants (12 per basket), compost, feed; planting up', q: 'units', mat: (P) => add(times(12, P('bedding')), [3, 5]), lab: [15, 25], vol: 0.75 },
   basketHang: { label: 'Hanging and taking down (access equipment)', q: 'units', mat: [0, 0], lab: [15, 30], vol: 0 },
   basketWater: { label: 'Watering, June to September (lance from the ground)', q: 'units', mat: [1, 3], lab: [50, 85], vol: 6 },
-  planterLarge: { label: 'Large planter (1.2–1.5 m), delivered', q: 'units', mat: [400, 1000], lab: [0, 0], vol: 0 },
-  planterLargeCare: { label: 'Two plantings a year (60 plants), compost top-up, watering', q: 'units', mat: (P) => add(times(60, P('bedding')), [5, 10]), lab: [140, 270], vol: 12 },
+  planterLarge: { label: 'Fibreglass planter, 1.2–1.5 m across, delivered, and filled with about 1 m³ of compost', q: 'units', mat: [688, 942], lab: [0, 0], vol: 0 },
+  planterLargeCare: { label: 'Two plantings a year (about 50 plug plants each), a 50-litre bag of compost, watering', q: 'units', mat: (P) => add(times(100, P('bedding')), [7, 13.99]), lab: [140, 270], vol: 12 },
   planterTimber: { label: 'Timber street planter, delivered', q: 'units', mat: [250, 550], lab: [0, 0], vol: 0 },
   planterTimberCare: { label: 'Perennial and bulb top-ups, watering', q: 'units', mat: (P) => add(times(3, P('perennial')), times(20, P('bulb'))), lab: [35, 75], vol: 4 },
   trough: { label: 'Parapet trough and fixing to the bridge', q: 'units', mat: [100, 220], lab: [50, 100], vol: 0 },
@@ -231,35 +267,35 @@ export const RATES = {
   centrepiece: { label: 'Tiered centrepiece planter', q: 1, mat: [2000, 4500], lab: [0, 0], vol: 0 },
   centrepieceCare: { label: 'Centrepiece: two plantings (300 plants), compost, watering', q: 1, mat: (P) => add(times(300, P('bedding')), [20, 40]), lab: [450, 700], vol: 30 },
   trafficMgmt: { label: 'Traffic management, 3 visits a year (must be paid)', q: 3, mat: [0, 0], lab: [250, 600], vol: 0 },
-  sign: { label: 'Sponsor or interpretation sign', q: 1, mat: [200, 600], lab: [0, 0], vol: 0 },
+  sign: { label: 'A1 interpretation sign on a lectern', q: 1, mat: [550, 1039], lab: [0, 0], vol: 0 },
   coordination: { label: 'Scheme coordination and publicity', q: 1, mat: [0, 0], lab: [300, 800], vol: 20 },
-  gardenPlant: { label: 'Roses (2 per m²), delphiniums, foxgloves and perennials (3 per m²), mulch', q: 'area', mat: (P) => add(times(2, P('rose')), times(3, P('perennial')), P('mulch')), lab: [15, 25], vol: 0.35 },
-  gardenCare: { label: 'Deadheading, rose pruning, staking, weeding', q: 'area', mat: [0.5, 1.5], lab: [5, 9], vol: 0.6 },
-  gravel: { label: 'Gravel paths: membrane and self-binding gravel', q: 'gravel', mat: [7, 12], lab: [15, 30], vol: 0.5 },
+  gardenPlant: { label: 'Bare-root roses (1 per m²), delphiniums, foxgloves and perennials (3 per m²), bark mulch', q: 'area', mat: (P) => add(times(1, P('rose')), times(3, P('perennial')), P('mulch')), lab: [15, 25], vol: 0.35 },
+  gardenCare: { label: 'Deadheading, rose pruning, staking, weeding; rose feed and canes (estimate)', q: 'area', mat: [0.5, 1.5], lab: [5, 9], vol: 0.6 },
+  gravel: { label: 'Gravel paths: membrane, 100 mm Type 1 sub-base, 50 mm self-binding gravel', q: 'gravel', mat: [15.7, 24.5], lab: [15, 30], vol: 0.5 },
   bedEdging: { label: 'Steel bed edging', q: 'edging', mat: [4, 8], lab: [3, 6], vol: 0.15 },
   hedge: { label: 'Low hedge round the beds (Ilex crenata or yew, 5 per metre)', q: 'hedge', mat: (P) => times(5, P('hedging')), lab: [6, 12], vol: 0.3 },
   hedgeTrim: { label: 'Trimming the low hedges twice a year', q: 'hedge', mat: [0, 0], lab: [1, 2], vol: 0.15 },
-  obelisk: { label: 'Oak obelisk for sweet peas (2.4 m)', q: 'obelisks', mat: [90, 250], lab: [0, 0], vol: 1 },
-  sweetPeas: { label: 'Sweet peas grown from seed by volunteers or a school, planted out each spring', q: 'obelisks', mat: [4, 8], lab: [15, 25], vol: 3 },
+  obelisk: { label: 'Steel obelisk for sweet peas (2–2.4 m)', q: 'obelisks', mat: [54.55, 129.99], lab: [0, 0], vol: 1 },
+  sweetPeas: { label: 'Sweet peas grown from seed by the children, one packet per obelisk, planted out each spring', q: 'obelisks', mat: [1.59, 2], lab: [15, 25], vol: 3 },
   cornfield: { label: 'Poppy and cornflower stripe: cultivate and sow (4 g/m²)', q: 'meadow', mat: (P) => P('wildSeed'), lab: [0.6, 1.5], vol: 0.04 },
   cornfieldResow: { label: 'Poppy stripe: rake over and resow each spring', q: 'meadow', mat: (P) => P('wildSeed'), lab: [0.6, 1.5], vol: 0.04 },
-  bench: { label: 'Bench (often sponsored as a memorial bench)', q: 'benches', mat: [300, 800], lab: [0, 0], vol: 2 },
-  sundial: { label: 'Stone sundial on a plinth', q: 1, mat: [400, 1500], lab: [0, 0], vol: 4 },
+  bench: { label: 'Recycled-plastic bench (often sponsored as a memorial bench)', q: 'benches', mat: [442.2, 442.2], lab: [0, 0], vol: 2 },
+  sundial: { label: 'Cast-stone sundial on a pedestal', q: 1, mat: [235, 560], lab: [0, 0], vol: 4 },
 };
 
 // Running a volunteer programme has its own costs. Contractors include these in their prices.
 export const PROGRAMME = [
-  { label: 'Tools, gloves, kneelers, first-aid kits', capital: [400, 1000], annual: [100, 250], when: 'volunteer' },
-  { label: 'Watering bowser on a trailer (about 1,000 litres), or IBC tanks filled from water butts', capital: [600, 2500], annual: [100, 400], when: 'containers' },
-  { label: 'Group insurance (RHS community group scheme, check cover)', capital: [0, 0], annual: [100, 300], when: 'volunteer' },
-  { label: 'Volunteer training: first aid, working safely near roads', capital: [0, 0], annual: [200, 600], when: 'volunteer' },
-  { label: 'Anglia in Bloom entry and judges’ briefing notes (check current fee)', capital: [0, 0], annual: [250, 700], when: 'always' },
+  { label: 'Tools, gloves (adult and child sizes), kneelers, watering cans, first-aid kits (estimate)', capital: [400, 1000], annual: [100, 250], when: 'volunteer' },
+  { label: 'Two reconditioned 1,000-litre IBC water tanks, filled from water butts or a council standpipe (a new road-tow bowser is about £3,600 + VAT, so borrow the council’s if possible)', capital: [115, 194], annual: [0, 0], when: 'volunteer' },
+  { label: 'Group insurance through the RHS community group scheme (estimate until quoted)', capital: [0, 0], annual: [100, 300], when: 'volunteer' },
+  { label: 'Emergency First Aid at Work for two volunteers (£160–£175 + VAT each, renewed every 3 years)', capital: [384, 420], annual: [128, 140], when: 'volunteer' },
+  { label: 'Anglia in Bloom entry and judges’ briefing notes (estimate until the entry form is out)', capital: [0, 0], annual: [250, 700], when: 'always' },
   // Volunteer time that isn't tied to one site; the environment and community marks depend on it
   { label: 'Litter picks and tidying along the judges’ route (monthly, about 10 people for 2 hours)', capital: [0, 0], annual: [0, 0], hours: 240, when: 'volunteer' },
   { label: 'Organising: volunteer rota, sponsors, social media, the judges’ portfolio', capital: [0, 0], annual: [0, 0], hours: 120, when: 'volunteer' },
-  { label: 'Judging day, a community planting day and a school session', capital: [0, 0], annual: [0, 0], hours: 60, when: 'volunteer' },
+  { label: 'Family planting days, judging day and a school session', capital: [0, 0], annual: [0, 0], hours: 60, when: 'volunteer' },
 ];
-export const VOLUNTEER_RATE = 12.5; // £/hour used to value volunteer time as in-kind match funding
+export const VOLUNTEER_RATE = 12.71; // £/hour: the National Living Wage from April 2026, used to value volunteer time as in-kind match funding
 
 export const ROLES = {
   flagship: 'Flagship',
@@ -343,13 +379,13 @@ export const SITES = [
     options: [
       {
         id: 'four', name: 'Four corner planters', scheme: 'summer',
-        summary: 'Four matching large planters, one in each corner of the square where people walk in, kept to the edges so the middle stays clear for markets and events. Each is planted as a classic container: a tall centre, blocks of colour, and trailing plants spilling over the rim.',
+        summary: 'Four matching 1.5 m planters, one in each corner of the square where people walk in, kept to the edges so the middle stays clear for markets and events. Each is planted as a classic container: a tall centre, blocks of colour, and trailing plants spilling over the rim.',
         maintenance: 1, impact: 1, wildlife: 0,
         shapes: [
-          { kind: 'planter', x: -14.5, z: -13.0, r: 1.4, h: 0.75, material: 'stone' },
-          { kind: 'planter', x: -4.5, z: 13.5, r: 1.4, h: 0.75, material: 'stone' },
-          { kind: 'planter', x: 10.0, z: 19.0, r: 1.4, h: 0.75, material: 'stone' },
-          { kind: 'planter', x: 15.5, z: -2.5, r: 1.4, h: 0.75, material: 'stone' },
+          { kind: 'planter', x: -14.5, z: -13.0, r: 0.75, h: 0.6, material: 'stone' },
+          { kind: 'planter', x: -4.5, z: 13.5, r: 0.75, h: 0.6, material: 'stone' },
+          { kind: 'planter', x: 10.0, z: 19.0, r: 0.75, h: 0.6, material: 'stone' },
+          { kind: 'planter', x: 15.5, z: -2.5, r: 0.75, h: 0.6, material: 'stone' },
         ],
         capital: ['planterLarge'], annual: ['planterLargeCare'],
       },
@@ -358,10 +394,10 @@ export const SITES = [
         summary: 'The same four corner planters, planted with long-flowering perennials and grasses over spring bulbs. Less colour than bedding, but no replanting twice a year and far less watering.',
         maintenance: 0, impact: 1, wildlife: 1,
         shapes: [
-          { kind: 'planter', x: -14.5, z: -13.0, r: 1.4, h: 0.75, material: 'stone' },
-          { kind: 'planter', x: -4.5, z: 13.5, r: 1.4, h: 0.75, material: 'stone' },
-          { kind: 'planter', x: 10.0, z: 19.0, r: 1.4, h: 0.75, material: 'stone' },
-          { kind: 'planter', x: 15.5, z: -2.5, r: 1.4, h: 0.75, material: 'stone' },
+          { kind: 'planter', x: -14.5, z: -13.0, r: 0.75, h: 0.6, material: 'stone' },
+          { kind: 'planter', x: -4.5, z: 13.5, r: 0.75, h: 0.6, material: 'stone' },
+          { kind: 'planter', x: 10.0, z: 19.0, r: 0.75, h: 0.6, material: 'stone' },
+          { kind: 'planter', x: 15.5, z: -2.5, r: 0.75, h: 0.6, material: 'stone' },
         ],
         capital: ['planterLarge'], annual: ['planterTimberCare'],
       },
@@ -635,7 +671,7 @@ export const SITES = [
     why: [
       'The open lawn east of the church, by the Memorial Fountain, is on the walk from Market Place to the river, and is not part of the graveyard.',
       'Four round beds in a line follow the church’s east end and the river. Each is a different colour, cool to hot, so walking past them feels like a little journey.',
-      'Oak obelisks of sweet peas give height and scent, and growing them from seed is a good project for a school or youth group.',
+      'Obelisks of sweet peas give height and scent, and growing them from seed is a good job for the children.',
       'In flower for July judging, and full of bees.',
     ],
     owner: "St Mary's Church (parochial church council) or the district council, to confirm",
@@ -648,17 +684,17 @@ export const SITES = [
     options: [
       {
         id: 'jewel', name: 'Four jewel beds', scheme: 'jewel',
-        summary: 'Four round beds, nearly 5 m across, in a line along the lawn between the church and the river. Each bed has its own colours: blue and white, then pink and lilac, then crimson, then orange and gold. All four are edged with the same catmint to tie them together, and each has an oak obelisk of sweet peas in the middle.',
+        summary: 'Four round beds, nearly 5 m across, in a line along the lawn between the church and the river. Each bed has its own colours: blue and white, then pink and lilac, then crimson, then orange and gold. All four are edged with the same catmint to tie them together, and each has a steel obelisk of sweet peas in the middle, grown from seed by the children. The beds have a simple cut turf edge.',
         maintenance: 1, impact: 2, wildlife: 2,
         shapes: [{ kind: 'beads', a: [150.0, -57.7], b: [144.6, -38.0], n: 4, r: 2.4, edge: 0, palettes: [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], climber: 13 }],
-        capital: ['perennialPlant', 'bedPrep', 'establish', 'bedEdging', 'obelisk'], annual: ['perennialCare', 'sweetPeas'],
+        capital: ['perennialPlant', 'bedPrep', 'establish', 'obelisk'], annual: ['perennialCare', 'sweetPeas'],
       },
       {
         id: 'perennial', name: 'Four perennial beds', scheme: 'perennial',
         summary: 'The same four round beds planted with tough, long-flowering perennials and grasses in drifts, without the obelisks. Less work, less colour.',
         maintenance: 0, impact: 1, wildlife: 2,
         shapes: [{ kind: 'beads', a: [150.0, -57.7], b: [144.6, -38.0], n: 4, r: 2.4, edge: 1, palettes: [[0, 2, 4, 5], [3, 0, 4, 5], [0, 2, 4, 5], [3, 0, 4, 5]] }],
-        capital: ['perennialPlant', 'bedPrep', 'establish', 'bedEdging'], annual: ['perennialCare'],
+        capital: ['perennialPlant', 'bedPrep', 'establish'], annual: ['perennialCare'],
       },
     ],
   },
@@ -752,6 +788,8 @@ export const JUDGING = {
   ],
   medals: [['Gold', 85], ['Silver-gilt', 75], ['Silver', 60], ['Bronze', 50]],
   checklist: [
+    { pillar: 'community', text: 'Start from the local dads’ group that already meets, with their children, then open every session to anyone in Hitchin: a family morning once a month, posted on local Facebook groups and school newsletters.' },
+    { pillar: 'community', text: 'Children always with their own parent or carer, jobs chosen for their age (sowing sweet peas, planting bulbs, watering, litter picks with grabbers), and a simple safeguarding policy. Registering with RHS It’s Your Neighbourhood gives free guidance and access to the RHS group insurance scheme.' },
     { pillar: 'community', text: 'A year-round calendar: bulb planting in autumn, litter picks in winter, planting days in spring, with photos and press cuttings as evidence.' },
     { pillar: 'community', text: 'Volunteers, school children and business owners waiting at stops on the route to explain their part.' },
     { pillar: 'community', text: 'Businesses sponsoring baskets and planters, and a best-dressed shop window award to bring the high street in.' },
@@ -761,7 +799,7 @@ export const JUDGING = {
     { pillar: 'horticulture', text: 'Judging is in July: every stop on the route needs summer colour then. Spring bulbs don\u2019t flower for the judges, but they count as evidence of year-round work.' },
     { pillar: 'horticulture', text: 'Plants at their peak in the July judging window, well weeded, deadheaded and watered, with no gaps or dead baskets.' },
     { pillar: 'horticulture', text: 'Right plant, right place: drought-tolerant perennials where watering is hard, and showpiece bedding only where people gather.' },
-    { pillar: 'horticulture', text: 'One or two special features judges will remember, such as the Windmill Hill lavender and a Market Place centrepiece.' },
+    { pillar: 'horticulture', text: 'One or two special features judges will remember, such as the Windmill Hill lavender banks and the Bancroft English Garden.' },
     { pillar: 'community', text: 'Clear judges’ briefing notes (Anglia in Bloom uses these instead of a portfolio) and a well-timed route with room for questions.' },
     { pillar: 'environment', text: 'Enter special awards too, e.g. parks (Bancroft Gardens, Windmill Hill) and the churchyard.' },
   ],

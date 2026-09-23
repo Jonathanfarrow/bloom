@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import './style.css';
-import { SITES, SCHEMES, ROLES, LEVEL, PLACE_LABELS, ROUTE, PROGRAMME, JUDGING, VOLUNTEER_RATE, SOURCING, PRICE_NOTES, costOf } from './data/sites.js';
+import { SITES, SCHEMES, ROLES, LEVEL, PLACE_LABELS, ROUTE, PROGRAMME, JUDGING, VOLUNTEER_RATE, SOURCING, PRICE_NOTES, TO_QUOTE, COMMUNITY, costOf } from './data/sites.js';
 import { buildGround, buildBridges } from './world/ground.js';
 import { buildTown } from './world/buildings.js';
 import { buildTrees } from './world/trees.js';
@@ -507,6 +507,7 @@ function renderPlan() {
       ${vol ? `<div class="tile"><span>Volunteers</span><b>${hrs(t.yearHours)} hrs</b><em>a year · about ${t.volunteers} people at 2 hrs/week</em></div>` : `<div class="tile"><span>Sites</span><b>${t.count}</b><em>of ${SITES.length} proposed</em></div>`}
     </div>
     ${vol ? `<p class="fine">Volunteer time is worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year at £${VOLUNTEER_RATE}/hour. Many funders accept that as in-kind match funding. Of those hours, ${hrs(t.siteHours)} are looking after the sites and ${hrs(t.progHours)} are litter picks, organising and events. Year one needs about ${hrs(t.setupHours)} more for planting and first-summer watering: ${hrs(t.firstYearHours)} in all.</p>` : ''}
+    ${vol ? `<h3 class="section-label">Who does the work</h3><p class="fine">${COMMUNITY.lead}</p><ul class="jlist">${COMMUNITY.points.map((x) => `<li class="jl-community">${x}</li>`).join('')}</ul>` : ''}
     <table class="plan-table">
       <thead><tr><th>Stop, site and option</th><th class="h">Set-up</th><th class="h">Per year</th></tr></thead>
       <tbody>${rows}
@@ -518,7 +519,7 @@ function renderPlan() {
     ${left.length ? `<p class="fine"><b>Future sites</b> (not costed in this phase): ${left.map((s) => `<button class="linkish" data-site="${s.id}">${s.name}</button>`).join(', ')}. Tick them in the list to add them.</p>` : ''}
     <details class="costs"><summary>Where the prices come from</summary>
       <ul class="sources">${PRICE_NOTES.map(([n, u]) => `<li><a href="${u}" target="_blank" rel="noopener">${n}</a></li>`).join('')}</ul>
-      <p class="fine">Containers, signs and specialist work are typical trade prices. Plants use the mix chosen above. Free woodchip from local tree surgeons, donated plants and cuttings grown by volunteers would bring costs down further.</p>
+      <p class="fine">Every price is a published UK price (September 2026, including VAT) from the supplier listed. “Bulk packs” means the cheapest published multi-pack price, not a private trade quote, so a nursery trade account, donated plants and free woodchip from tree surgeons would bring costs down further. Still estimates until quoted: ${TO_QUOTE.join('; ')}.</p>
     </details>
     <p class="fine">Ranges use UK supplier prices and quantities measured from the model. Ownership and permissions are to be confirmed site by site. Sponsorship (baskets, roundabout, planters) can reduce the council's share further.</p>
     <div class="row"><button class="primary" id="copy-plan">Copy plan for the council paper</button><button class="secondary" id="open-judging">How to win</button></div>
@@ -569,7 +570,11 @@ function planText() {
     `Phase 1: ${t.count} sites, delivered by volunteers, with paid specialists only where needed (traffic management, work at height, structural fixings, machinery). Plants bought: ${SOURCING[state.sourcing].name.toLowerCase()}.`,
     `Set-up ${range(t.setup)} (including 10% contingency). Running costs ${range(t.annual)} a year.`,
     vol ? `Volunteer time: about ${hrs(t.firstYearHours)} hours in year one (including ${hrs(t.setupHours)} to plant and water in), then ${hrs(t.yearHours)} hours a year (${hrs(t.siteHours)} on the sites, ${hrs(t.progHours)} on litter picks, organising and events). That is about ${t.volunteers} regular volunteers giving 2 hours a week through the season, and the time is worth about ${gbp(t.yearHours * VOLUNTEER_RATE)} a year as in-kind match funding.` : '',
-    'Figures are indicative ranges for budgeting, based on typical UK prices and quantities measured from a 3D model of the town. Quotes to follow.',
+    'Every price is a published UK supplier price (September 2026, including VAT); quantities are measured from a 3D model of the town. Still to be quoted: ' + TO_QUOTE.join('; ') + '.',
+    '',
+    'WHO DOES THE WORK',
+    COMMUNITY.lead,
+    ...COMMUNITY.points.map((x) => '- ' + x),
     '',
     'HOW THE PLAN TARGETS AN ANGLIA IN BLOOM AWARD (LARGE TOWN)',
     'Judges mark out of 100: horticultural achievement 40, environmental responsibility 30, community participation 30 (Gold 85+).',

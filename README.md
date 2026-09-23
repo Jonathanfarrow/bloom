@@ -46,15 +46,19 @@ to the council, businesses, sponsors and residents.
 
 ## About the costs
 
-Costs are **budget ranges**, not quotes. Plant material is priced per plant
-(or per m² of seed) from UK supplier prices seen online, for example
-wildflower seed at £28–43/kg sown at 4 g/m², lavender plugs and 9 cm liners by
-the hundred, and bulbs by the thousand. The sources are listed under "Where the
-prices come from" in the app. A switch chooses how plants are bought:
+Every unit price is a **published UK price** (checked September 2026,
+including VAT), with the supplier listed under "Where the prices come from" in
+the app: for example lavender plug plants at 42p (Dobies, 24 for £9.99), jumbo
+perennial plugs at £3.33–£4.33, bare-root roses at £15.75–£18.99, crocus at 19p
+(Peter Nyssen, 250 for £47.50) and 1.5 m fibreglass planters at £794.95.
+"Bulk packs" means the cheapest published multi-pack price, not a private trade
+quote, so a nursery trade account would bring plant costs down. Quantities are
+measured from the 3D model. Insurance, the Anglia in Bloom entry fee and tools
+are still estimates until quoted. A switch chooses how plants are bought:
 
-- **Wholesale + local shops** (default): 80% trade plugs, bulbs and seed, 20% bought locally
-- **All wholesale**
-- **All shop-bought**
+- **Bulk packs + local shops** (default): 80% bulk packs, 20% bought locally
+- **All bulk packs**
+- **All from local shops**
 
 Rates live in `PRICES` and `RATES` in `src/data/sites.js`. Change them once
 you have quotes and every figure in the app updates.
